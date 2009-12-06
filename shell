@@ -1,0 +1,2 @@
+erl -pa ./deps/erlang_couchdb-0.2.3/ebin/ -pa ./deps/mochiweb-src/ebin/ -pa ./ebin
+

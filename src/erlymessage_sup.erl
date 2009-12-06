@@ -43,12 +43,12 @@ upgrade() ->
 init([]) ->
     Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,   
     WebConfig = [
-         {ip, Ip},
-                 {port, 8000},
-                 {docroot, erlymessage_deps:local_path(["priv", "www"])}],
+    	{ip, Ip},
+        {port, 8000},
+        {docroot, erlymessage_deps:local_path(["priv", "www"])}
+    ],
     Web = {erlymessage_web,
            {erlymessage_web, start, [WebConfig]},
            permanent, 5000, worker, dynamic},
-
     Processes = [Web],
     {ok, {{one_for_one, 10, 10}, Processes}}.
