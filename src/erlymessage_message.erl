@@ -8,6 +8,8 @@
 %% For testing
 -export([headers2json/1, json2headers/1]).
 
+%% Public API
+
 create(Store, #message{} = Message) ->
 	Document = [
 		{?l2b("type"), ?l2b("message")},
@@ -19,6 +21,8 @@ create(Store, #message{} = Message) ->
 	],
 	{{id, Id}, {rev, _}} = Store:create(Document),
 	doc2message(Store, [{<<"_id">>, Id} | Document]).	
+	
+%% Private API	
 	
 doc2message(Store, Doc) ->
 	#message{

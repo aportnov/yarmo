@@ -16,12 +16,13 @@ handle_get(Request)	->
 		[] ->
 			{404, [], []};
 		Topic ->
-			get_topic_options(lists:reverse(Topic), Request)
+			get_relationships(lists:reverse(Topic), Request)
 	end.	
 	
 handle_post(Request) ->	
 	case lists:reverse(Request#request.path) of
-	 	["incoming" | Topic] -> create_message(lists:reverse(Topic), Request, erlymessage_store);
+	 	["incoming" | Topic] -> 
+			erlymessage_web_msg:post_message({topic, lists:reverse(Topic)}, Request, erlymessage_store);
 
 		_ -> {501, [], []}
 	end.	
@@ -34,7 +35,7 @@ get_message(_Topic, _Id, _Request) ->
 get_batch(_Topic, _Id, _Request) ->
 	{501, [], []}.
 	
-get_topic_options(Topic, Request) ->
+get_relationships(Topic, Request) ->
 	HostHeader = erlymessage_web_utils:get_header('Host', [], Request#request.headers),
 	
 	Relationships = [
@@ -50,18 +51,3 @@ get_topic_options(Topic, Request) ->
 	Builder = erlymessage_web_utils:link_header_builder(Relationships, "topics"),	
 	Headers = [Builder(Topic, HostHeader)],
 	{200, Headers, []}.
-	
-create_message(Topic, Request, Store) ->
-	Dest = erlymessage_destination:ensure_exist(Store, #destination{type = "topic", name = Topic}),
-	Document = #message {
-		destination = Dest#destination.id, 
-		max_ttl     = Dest#destination.max_ttl, 
-		headers     = Request#request.headers,
-		body        = Request#request.body
-	}, 
-	Msg = erlymessage_message:create(Store, Document),
-
-	HostHeader = erlymessage_web_utils:get_header('Host', [], Request#request.headers),
-	LocationHeader = HostHeader ++ "/topics" ++ string:join(Topic, "/") ++ "/messages/" ++ Msg#message.id,
-	
-	{201, [{'Location', LocationHeader}], []}.
