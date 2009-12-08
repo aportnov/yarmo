@@ -1,7 +1,7 @@
--module(erlymessage_store).
+-module(erlymsg_store).
 -author('author <alex.portnov@gmail.com>').
 
--include("erlymessage.hrl").
+-include("erlymsg.hrl").
 
 -export([read/1, create/1, create/2, get_value/2]).
 

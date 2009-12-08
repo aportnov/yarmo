@@ -1,9 +1,9 @@
--module(erlymessage_message).
+-module(erlymsg_message).
 -author('author <alex.portnov@gmail.com>').
 
--include("erlymessage.hrl").
+-include("erlymsg.hrl").
 
--export([create/2]).
+-export([create/2, find/2]).
 
 %% For testing
 -export([headers2json/1, json2headers/1]).
@@ -21,6 +21,12 @@ create(Store, #message{} = Message) ->
 	],
 	{{id, Id}, {rev, _}} = Store:create(Document),
 	doc2message(Store, [{<<"_id">>, Id} | Document]).	
+	
+find(Store, MessageId) ->
+	case Store:read(MessageId) of
+		not_found -> not_found;
+		Message -> doc2message(Store, Message)
+	end.		
 	
 %% Private API	
 	
@@ -48,12 +54,12 @@ filter_entity_headers(Headers) ->
 	
 headers2json(Headers) ->
 	Fun = fun({Name, Value}, Acc) ->
-		[{struct, [{name, Name}, {value, ?l2b(Value)}]} | Acc]
+		[{struct, [{name, ?a2b(Name)}, {value, ?l2b(Value)}]} | Acc]
 	end,	
 	lists:reverse(lists:foldl(Fun, [], Headers)).
 
 json2headers(Headers) ->
-	Fun = fun({struct, [{name, Name}, {value, Value}]}, Acc) ->
-		[{Name, ?b2l(Value)} | Acc]
+	Fun = fun({struct, [{_, Name}, {_, Value}]}, Acc) ->
+		[{?b2a(Name), ?b2l(Value)} | Acc]
 	end,
 	lists:reverse(lists:foldl(Fun, [], Headers)).				

@@ -1,7 +1,7 @@
--module(erlymessage_destination).
+-module(erlymsg_destination).
 -author('author <alex.portnov@gmail.com>').
 
--include("erlymessage.hrl").
+-include("erlymsg.hrl").
 
 -export([find/2, create/2, ensure_exist/2, generate_key/2]).
 
@@ -24,7 +24,7 @@ create(Store, #destination{type = Type, name = Name} = Destination) ->
 	
 	doc2dest(Store, [{<<"_id">>, ?l2b(Key)} | Document]).
 
-ensure_exist(Store, #destination{type = Type, name = Name} = Destination) ->
+ensure_exist(Store, #destination{} = Destination) ->
 	case ?MODULE:find(Store, Destination) of
 		not_found -> ?MODULE:create(Store, Destination);
 		Dest -> Dest	

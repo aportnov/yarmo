@@ -1,9 +1,9 @@
 %% @author author <author@example.com>
 %% @copyright YYYY author.
 
-%% @doc Supervisor for the erlymessage application.
+%% @doc Supervisor for the erlymsg application.
 
--module(erlymessage_sup).
+-module(erlymsg_sup).
 -author('author <alex.portnov@gmail.com>').
 
 -behaviour(supervisor).
@@ -45,10 +45,10 @@ init([]) ->
     WebConfig = [
     	{ip, Ip},
         {port, 8000},
-        {docroot, erlymessage_deps:local_path(["priv", "www"])}
+        {docroot, erlymsg_deps:local_path(["priv", "www"])}
     ],
-    Web = {erlymessage_web,
-           {erlymessage_web, start, [WebConfig]},
+    Web = {erlymsg_web,
+           {erlymsg_web, start, [WebConfig]},
            permanent, 5000, worker, dynamic},
     Processes = [Web],
     {ok, {{one_for_one, 10, 10}, Processes}}.

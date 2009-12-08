@@ -1,16 +1,16 @@
--module(erlymessage_web_topic).
+-module(erlymsg_topic_handler).
 -author('author <alex.portnov@gmail.com>').
 
 -export([handle_get/1, handle_post/1]).
 
--include("erlymessage.hrl").
+-include("erlymsg.hrl").
 
 %% Public API
 handle_get(Request)	->
 	?LOG("REQUEST", [Request]),
 	case lists:reverse(Request#request.path) of
-		[MessageId, "messages" | Topic ] ->
-			get_message(lists:reverse(Topic), MessageId, Request);
+		[MessageId, "messages" | _ ] ->
+			erlymsg_msg_handler:get_message(MessageId, Request, erlymsg_store);
 		[BatchId, "batches" | Topic] ->
 			get_batch(lists:reverse(Topic), BatchId, Request);
 		[] ->
@@ -22,21 +22,18 @@ handle_get(Request)	->
 handle_post(Request) ->	
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Topic] -> 
-			erlymessage_web_msg:post_message({topic, lists:reverse(Topic)}, Request, erlymessage_store);
+			erlymsg_msg_handler:post_message({topic, lists:reverse(Topic)}, Request, erlymsg_store);
 
 		_ -> {501, [], []}
 	end.	
 	
 %% Private Implementation
 
-get_message(_Topic, _Id, _Request) ->
-	{501, [], []}.
-
 get_batch(_Topic, _Id, _Request) ->
 	{501, [], []}.
 	
 get_relationships(Topic, Request) ->
-	HostHeader = erlymessage_web_utils:get_header('Host', [], Request#request.headers),
+	HostHeader = erlymsg_web_utils:get_header('Host', [], Request#request.headers),
 	
 	Relationships = [
 		{{rel, "post-message"}, {path, "incoming"}},
@@ -48,6 +45,6 @@ get_relationships(Topic, Request) ->
 		{{rel, "first-batch"}, {path, "poller/batches/first"}},
 		{{rel, "last-batch"}, {path, "poller/batches/last"}}
 	],	
-	Builder = erlymessage_web_utils:link_header_builder(Relationships, "topics"),	
+	Builder = erlymsg_web_utils:link_header_builder(Relationships, "topics"),	
 	Headers = [Builder(Topic, HostHeader)],
 	{200, Headers, []}.

@@ -1,4 +1,4 @@
--module(erlymessage_web_utils).
+-module(erlymsg_web_utils).
 -author('author <alex.portnov@gmail.com>').
 
 -export([link_header_builder/2, get_header/3]).

@@ -1,9 +1,9 @@
--module(erlymessage_web).
+-module(erlymsg_web).
 -author('author <alex.portnov@gmail.com>').
 
 -export([start/1, stop/0, loop/2]).
 
--include("erlymessage.hrl").
+-include("erlymsg.hrl").
 
 %% External API
 
@@ -33,10 +33,10 @@ loop(Req, _DocRoot) ->
 	?LOG("REQUEST DATA", [RequestData]),
 	case RequestData#request.path of
       ["topics" | TopicPath] ->
-		Response = MethodHandler(erlymessage_web_topic, RequestData#request{path=TopicPath}),
+		Response = MethodHandler(erlymsg_topic_handler, RequestData#request{path=TopicPath}),
 		Req:respond(Response);
 	  ["queues" | QueuePath] ->
-		Response = MethodHandler(erlymessage_web_queue, RequestData#request{path=QueuePath}),
+		Response = MethodHandler(erlymsg_queue_handler, RequestData#request{path=QueuePath}),
 		Req:respond(Response);
        _ ->
        	Req:not_found()

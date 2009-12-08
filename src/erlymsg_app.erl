@@ -1,9 +1,9 @@
 %% @author author <author@example.com>
 %% @copyright YYYY author.
 
-%% @doc Callbacks for the erlymessage application.
+%% @doc Callbacks for the erlymsg application.
 
--module(erlymessage_app).
+-module(erlymsg_app).
 -author('author <alex.portnov@gmail.com>').
 
 -behaviour(application).
@@ -11,12 +11,12 @@
 
 
 %% @spec start(_Type, _StartArgs) -> ServerRet
-%% @doc application start callback for erlymessage.
+%% @doc application start callback for erlymsg.
 start(_Type, _StartArgs) ->
-    erlymessage_deps:ensure(),
-    erlymessage_sup:start_link().
+    erlymsg_deps:ensure(),
+    erlymsg_sup:start_link().
 
 %% @spec stop(_State) -> ServerRet
-%% @doc application stop callback for erlymessage.
+%% @doc application stop callback for erlymsg.
 stop(_State) ->
     ok.
