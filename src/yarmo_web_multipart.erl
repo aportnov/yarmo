@@ -60,6 +60,8 @@ split_bin(SplitBy, Binary, Acc) ->
 		{exact, Index} ->
 			<<Part:Index/binary, _:SplitSize/binary, Rest/binary>> = Binary,
 			split_bin(SplitBy, Rest, [Part | Acc]);
+		{partial, _, _} ->
+			lists:reverse([Binary | Acc]);
 		not_found ->		
 			lists:reverse([Binary | Acc])
 	end.		
