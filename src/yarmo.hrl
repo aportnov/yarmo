@@ -2,6 +2,7 @@
 -define(b2l(V), binary_to_list(V)).
 -define(l2b(V), list_to_binary(V)).
 -define(a2b(V), atom_to_binary(V, utf8)).
+-define(l2a(V), list_to_atom(V)).
 
 -define(DATABASE_NAME, "erlymessage").
 
@@ -11,7 +12,7 @@
 
 -define(LOG(Msg, Data), io:format(Msg ++ " ~p~n", Data)).
 
--record(request, {method = 'GET', path = [], params, headers, cookies, body, peer}).
+-record(request, {context_root = queues, method = 'GET', path = [], params, headers, cookies, body, peer}).
 
 -record(destination, {type = queue, id, name, max_ttl = 1800, reply_time = 60}).
 

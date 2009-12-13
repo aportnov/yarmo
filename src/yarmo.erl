@@ -3,7 +3,7 @@
 
 %% @doc TEMPLATE.
 
--module(erlymsg).
+-module(yarmo).
 -author('author <alex.portnov@gmail.com>').
 -export([start/0, stop/0]).
 
@@ -16,15 +16,15 @@ ensure_started(App) ->
     end.
         
 %% @spec start() -> ok
-%% @doc Start the erlymsg server.
+%% @doc Start the yarmo server.
 start() ->
-    erlymsg_deps:ensure(),
+    yarmo_deps:ensure(),
     ensure_started(crypto),
-    application:start(erlymsg).
+    application:start(yarmo).
 
 %% @spec stop() -> ok
-%% @doc Stop the erlymsg server.
+%% @doc Stop the yarmo server.
 stop() ->
-    Res = application:stop(erlymsg),
+    Res = application:stop(yarmo),
     application:stop(crypto),
     Res.

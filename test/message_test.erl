@@ -7,5 +7,5 @@ header_conversion_test() ->
 	Headers = [{'Host', "www.sample.com"}, {'X-Powered-By', "Erlang"}],
 	JsonHeaders = [{struct,[{name, <<"Host">>}, {value, <<"www.sample.com">>}]}, {struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}],
 	
- 	JsonHeaders = erlymsg_message:headers2json(Headers),
-	Headers     = erlymsg_message:json2headers(JsonHeaders).
+ 	JsonHeaders = yarmo_message:headers2json(Headers),
+	Headers     = yarmo_message:json2headers(JsonHeaders).

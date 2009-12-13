@@ -5,8 +5,8 @@
 
 get_header_test() ->
 	Headers = [{'Host', "www.sample.com"}, {'Cache-Control', "private max-age=20"}],
-	"www.sample.com" = erlymsg_web_utils:get_header('Host', [], Headers),
-	"default" = erlymsg_web_utils:get_header('Something', "default", Headers).
+	"www.sample.com" = yarmo_web_handler:get_header('Host', [], Headers),
+	"default" = yarmo_web_handler:get_header('Something', "default", Headers).
 	
 link_header_builder_test() ->
 	Relationships = [
@@ -14,7 +14,7 @@ link_header_builder_test() ->
 		{{rel, "post-batch"}, {path, "incoming/batches"}}
 	],
 	
-	Builder = erlymsg_web_utils:link_header_builder(Relationships, "topics"),
+	Builder = yarmo_web_handler:link_header_builder(Relationships, "topics"),
 	
 	{'Link', 
 		"<http://host/topics/sample/incoming>; rel=\"post-message\"," ++ 

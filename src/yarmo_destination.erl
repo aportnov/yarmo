@@ -1,7 +1,7 @@
--module(erlymsg_destination).
+-module(yarmo_destination).
 -author('author <alex.portnov@gmail.com>').
 
--include("erlymsg.hrl").
+-include("yarmo.hrl").
 
 -export([find/2, create/2, ensure_exist/2, generate_key/2]).
 

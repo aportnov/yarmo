@@ -1,9 +1,9 @@
--module(erlymsg_web).
+-module(yarmo_web).
 -author('author <alex.portnov@gmail.com>').
 
 -export([start/1, stop/0, loop/2]).
 
--include("erlymsg.hrl").
+-include("yarmo.hrl").
 
 %% External API
 
@@ -19,27 +19,19 @@ stop() ->
 
 loop(Req, _DocRoot) ->
 	RequestData = request_data(Req),
-	
-	MethodHandler = fun(Mod, Request) ->
-		case Request#request.method of
-			Method when Method =:= 'GET'; Method =:= 'HEAD' ->
-				Mod:handle_get(Request);
-			'POST' ->
-				Mod:handle_post(Request);
-			_ ->
-				{501, [], []}
-		end	
-	end,	
-	?LOG("REQUEST DATA", [RequestData]),
+	RequestHandeler = yarmo_web_handler, 
+
 	case RequestData#request.path of
-      ["topics" | TopicPath] ->
-		Response = MethodHandler(erlymsg_topic_handler, RequestData#request{path=TopicPath}),
-		Req:respond(Response);
-	  ["queues" | QueuePath] ->
-		Response = MethodHandler(erlymsg_queue_handler, RequestData#request{path=QueuePath}),
+      [Type | Path] when Type =:= "topics"; Type =:= "queues" ->
+		Response = RequestHandeler:handle(RequestData#request{context_root = Type, path = Path}),
 		Req:respond(Response);
        _ ->
-       	Req:not_found()
+		case RequestData#request.method of
+			Method when Method =:= 'GET'; Method =:= 'HEAD' ->
+				Req:not_found();
+			_ -> 
+				Req:respond({501, [], []})	
+		end
 	end.	
 
 %% Internal API

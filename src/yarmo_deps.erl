@@ -5,7 +5,7 @@
 %%      loading path, and locate resources relative
 %%      to this application's path.
 
--module(erlymsg_deps).
+-module(yarmo_deps).
 -author('author <alex.portnov@gmail.com>').
 
 -export([ensure/0, ensure/1]).

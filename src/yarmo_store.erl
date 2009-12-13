@@ -1,7 +1,7 @@
--module(erlymsg_store).
+-module(yarmo_store).
 -author('author <alex.portnov@gmail.com>').
 
--include("erlymsg.hrl").
+-include("yarmo.hrl").
 
 -export([read/1, create/1, create/2, get_value/2]).
 

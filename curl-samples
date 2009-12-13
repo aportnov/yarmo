@@ -1,0 +1,8 @@
+# Create Message
+
+curl -v -X POST --data-binary "<message>Erlang is the best</message>" http://localhost:8000/queues/erlang/rest/sample/incoming
+curl -v -X POST --data-binary "<message>Erlang is the best</message>" http://localhost:8000/topics/erlang/rest/sample/incoming
+
+# Get Existing Message
+
+curl -v -X GET http://localhost:8000/queues/erlang/rest/sample/messages/ad90fe5acbc1308a3345b7b947e45c99
