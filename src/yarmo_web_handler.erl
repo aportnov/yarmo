@@ -48,6 +48,9 @@ handle_post(Request) ->
 	 	["incoming" | Destination] -> 
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
 			post_message(Dest, Request, ?STORE);
+		["batches", "incomming" | Destination] ->
+			?LOG("REQUEST", [Request]),
+			{200, [], []};	
 		_ -> {405, [], []}
 	end.
 	

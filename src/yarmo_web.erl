@@ -56,4 +56,4 @@ request_data(Req) ->
 		headers = mochiweb_headers:to_list(Req:get(headers)),
 		cookies = {cookies, Req:parse_cookie()},
 		body = Body
-	}.
+	}.	
