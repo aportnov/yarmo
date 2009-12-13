@@ -22,7 +22,6 @@ parse_multipart_request(#request{body = Body} = Request) ->
 
 parser_multipart_request(Body, Boundary) ->
 	BS = byte_size(Boundary),
-	
 	RequestBody = case find_in_binary(<<"\r\n--", Boundary:BS/binary, "--\r\n">>, Body) of
 		{exact, Index} ->
 			<<B:Index/binary, _/binary>> = Body,
@@ -37,9 +36,12 @@ parser_multipart_request(Body, Boundary) ->
 	lists:foldr(Fun, [], Requests).			
 
 parse_request_part(Binary) ->
-	[Body | HeaderLines] = lists:reverse(split_bin(<<"\r\n">>, Binary)),
-	Headers = lists:foldr(fun(Line, Acc) -> ([split_header(Line) | Acc]) end, [], HeaderLines),
-	#request{headers = Headers, body = Body, method = 'POST'}.
+	[Body | Headers] = lists:reverse(split_bin(<<"\r\n">>, Binary)),
+
+	Fun = fun(Line, Acc) -> 
+		[split_header(Line) | Acc]
+	end,
+	#request{headers = lists:foldr(Fun, [], Headers), body = Body, method = 'POST'}.
 
 %% Utility Functions
 
