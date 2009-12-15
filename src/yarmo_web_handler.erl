@@ -49,8 +49,8 @@ handle_post(Request) ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
 			post_message(Dest, Request, ?STORE);
 		["batches", "incomming" | Destination] ->
-			?LOG("REQUEST", [Request]),
-			{200, [], []};	
+			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
+			post_batch(Dest, Request, ?STORE); 
 		_ -> {405, [], []}
 	end.
 	
@@ -78,7 +78,7 @@ get_message(MessageId, _Request, Store) ->
 get_batch(_Destination, _Id, _Request) ->
 	{501, [], []}.	
 	
-
+%% Relationships
 get_relationships({topics, Topic}, Request, Store) ->
 	Relationships = [
 		{{rel, "post-message"}, {path, "incoming"}},
@@ -112,27 +112,62 @@ get_relationships(Relationships, #destination{name = DestName} = Destination, Re
 			Builder = link_header_builder(Relationships, Request#request.context_root),	
 			Headers = [Builder(DestName, HostHeader)],
 			{200, Headers, []}
-	end.			
-
+	end.	
+			
+%% Messages
 post_message({topics, Topic}, Request, Store) ->
 	Destination = #destination{type = "topic", name = Topic},
-	post_message(Destination, message_url(Request#request.context_root, Topic), Request, Store);
+	post_message(Destination, location_url(Request#request.context_root, Topic), Request, Store);
 
 post_message({queues, Queue}, Request, Store) ->
 	Destination = #destination{type = "queue", name = Queue},
-	post_message(Destination, message_url(Request#request.context_root, Queue), Request, Store).
+	post_message(Destination, location_url(Request#request.context_root, Queue), Request, Store).
 
 post_message(#destination{} = Destination, MessageUrlFun, Request, Store) ->
 	Dest = yarmo_destination:ensure_exist(Store, Destination),
+	Msg = create_message(Dest, Request, Store),
+	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
+
+create_message(#destination{} = Dest, Request, Store) ->
 	Document = #message {
 		destination = Dest#destination.id, 
 		max_ttl     = Dest#destination.max_ttl, 
 		headers     = Request#request.headers,
 		body        = Request#request.body
 	}, 
-	Msg = yarmo_message:create(Store, Document),
-	{201, [{'Location', MessageUrlFun(Msg#message.id)}], []}.			
+	yarmo_message:create(Store, Document).
+
+%% Message Batches	
+post_batch({topics, Topic}, Request, Store) ->
+	Destination = #destination{type = "topic", name = Topic},
+	post_batch(Destination, location_url(Request#request.context_root, Topic), Request, Store);
+
+post_batch({queues, Queue}, Request, Store) ->
+	Destination = #destination{type = "queue", name = Queue},
+	post_batch(Destination, location_url(Request#request.context_root, Queue), Request, Store).
+
+post_batch(#destination{} = Destination, UrlFun, Request, Store) ->
+	Dest = yarmo_destination:ensure_exist(Store, Destination),
+
+	Batch = yarmo_message:create_batch(Store, #batch{destination = Dest#destination.id, max_ttl = Dest#destination.max_ttl}),
 	
+	MsgFun = fun(#request{} = MsgReq, Acc) ->
+		Msg = create_message(Dest, MsgReq, Store),
+		[UrlFun(message, Msg#message.id) | Acc]
+	end,	
+	Body = lists:foldr(MsgFun, [], parse_batch_body(Request)),
+	
+	{201, [{'Content-Type', "text/uri-list"}, {'Location', UrlFun(batch, Batch#batch.id)}], string:join(Body, "\r\n") }.			
+
+%% For now only parse multipart request. Need to implement atom feed parser.
+parse_batch_body(#request{headers = Headers} = Request) ->
+	case get_header('Content-Type', unknown, Headers) of
+		unknown -> [];
+		[$m,$u,$l,$t,$i,$p,$a,$r,$t,$/ | _] -> yarmo_web_multipart:parse_multipart_request(Request);
+		_ -> []
+	end.	
+
+%% Destinations	
 create_destination({topics, Topic}, Request, Store) ->
 	create_destination(#destination{type = "topic", name = Topic}, Request, Store);
 
@@ -182,9 +217,14 @@ get_header(Name, Default, Headers) ->
 		_ -> Default	
 	end.
 
-message_url(ContextRoot, Destination) ->
-	fun(MessageId) ->
-		destination_url(ContextRoot, Destination) ++ "/messages/" ++ MessageId
+location_url(ContextRoot, Destination) ->
+	fun(Type, Id) ->
+		Suffix = case Type of
+			message -> "/messages/";
+			batch   -> "/batches/";
+			_       -> "/"
+		end,
+		destination_url(ContextRoot, Destination) ++ Suffix ++ Id	
 	end.	
 	
 destination_url(ContextRoot, Destination) ->
