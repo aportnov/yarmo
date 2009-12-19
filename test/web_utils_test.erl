@@ -19,3 +19,12 @@ link_header_builder_test() ->
 	{'Link', 
 		"<http://host/topics/sample/incoming>; rel=\"post-message\"," ++ 
 		" <http://host/topics/sample/incoming/batches>; rel=\"post-batch\""} = Builder(["sample"], "host").
+
+expires_header_test() ->
+	Mod = yarmo_web_handler,
+	DateTime = {{2009,12,19},{18,55,10}},
+	"Sun, 20 Dec 2009 00:55:48 GMT" = Mod:expires_header(DateTime, 38).
+			
+make_etag_test() ->
+	Mod = yarmo_web_handler,
+	"\"57PUN57VQTDZC1BCHRIRIMC7H\"" = Mod:make_etag({'Link', "Sample Link"}). 			

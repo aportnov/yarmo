@@ -6,7 +6,7 @@
 -export([handle/1]).
 
 %% Export for testing
--export([link_header_builder/2, get_header/3]).
+-export([link_header_builder/2, get_header/3, expires_header/2, make_etag/1]).
 
 -include("yarmo.hrl").
 
@@ -110,7 +110,13 @@ get_relationships(Relationships, #destination{name = DestName} = Destination, Re
 			HostHeader = get_header('Host', [], Request#request.headers),
 
 			Builder = link_header_builder(Relationships, Request#request.context_root),	
-			Headers = [Builder(DestName, HostHeader)],
+			LinkHeader = Builder(DestName, HostHeader),
+			Headers = [
+				LinkHeader,
+				{'Cache-Control', "public, max-age=\"86400\""},
+				{'Expires', expires_header(erlang:universaltime(), 86400)},
+				{'ETag', make_etag(LinkHeader)}
+			],
 			{200, Headers, []}
 	end.	
 			
@@ -229,3 +235,13 @@ location_url(ContextRoot, Destination) ->
 	
 destination_url(ContextRoot, Destination) ->
 	"/" ++ ContextRoot ++ "/" ++ string:join(Destination, "/").		
+	
+expires_header(DateTime, TtlSeconds) ->
+	Sec = calendar:datetime_to_gregorian_seconds(DateTime),
+	ExpireDatetime = calendar:gregorian_seconds_to_datetime(Sec + TtlSeconds),
+	httpd_util:rfc1123_date(ExpireDatetime).
+
+make_etag(Term) ->
+    <<SigInt:128/integer>> = erlang:md5(term_to_binary(Term)),
+    "\"" ++ lists:flatten(io_lib:format("~.36B",[SigInt])) ++ "\"".
+	

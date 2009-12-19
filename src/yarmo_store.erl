@@ -1,6 +1,8 @@
 -module(yarmo_store).
 -author('author <alex.portnov@gmail.com>').
 
+-behaviour(data_store).
+
 -include("yarmo.hrl").
 
 -export([read/1, create/1, create/2, get_value/2]).
