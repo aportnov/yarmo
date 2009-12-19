@@ -6,16 +6,16 @@
 -export([read/1, create/1, create/2, get_value/2]).
 
 read(_Key) ->
-	{{read, Result}, _, _} = MockStore,
+	{{read, Result}, _} = MockStore,
 	Result.	
 
 create(_Key, _Document) ->
-	{_, {create, Result}, _} = MockStore,
+	{_, {create, Result}} = MockStore,
 	Result.	
 
 
 create(_Document) ->
-	{_, _, {create, Result}} = MockStore,
+	{_, {create, Result}} = MockStore,
 	Result.	
 
 get_value(Document, Name) ->	
