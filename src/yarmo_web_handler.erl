@@ -1,73 +1,66 @@
--module(yarmo_web_handler).
+-module(yarmo_web_handler, [Request, Store]).
 -author('author <alex.portnov@gmail.com>').
 
--behaviour(request_handler).
-
--export([handle/1]).
+-export([handle/0]).
 
 %% Export for testing
 -export([link_header_builder/2, get_header/3, expires_header/2, make_etag/1]).
 
 -include("yarmo.hrl").
 
--define(STORE, yarmo_store).
-
 %% Public API
-handle(#request{} = Request) ->
+handle() ->
 	case Request#request.method of
 		Method when Method =:= 'GET'; Method =:= 'HEAD' ->
-			handle_get(Request);
+			handle_get();
 		'POST' ->
-			handle_post(Request);
+			handle_post();
 		'PUT' ->
-			handle_put(Request);	
+			handle_put();	
 		_ ->
 			{405, [], []}
-	end;	
-	
-handle(_) ->
-		 {501, [], []}.
+	end.	
 
 %% Request Handlers
 
-handle_get(Request)	->
+handle_get()	->
 	case lists:reverse(Request#request.path) of
-		[MessageId, "messages" | _ ] ->
-			get_message(MessageId, Request, ?STORE);
+		[MessageId, "messages" | _Destination ] when length(_Destination) > 0 ->
+			get_message(MessageId);
 		[BatchId, "batches" | Destination] ->
-			get_batch(lists:reverse(Destination), BatchId, Request);
+			get_batch(lists:reverse(Destination), BatchId);
 		[] ->
 			{404, [], []};
 		Destination ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
-			get_relationships(Dest, Request, ?STORE)
+			get_relationships(Dest)
 	end.		
 
-handle_post(Request) ->	
+handle_post() ->	
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Destination] -> 
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
-			post_message(Dest, Request, ?STORE);
+			post_message(Dest);
 		["batches", "incomming" | Destination] ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
-			post_batch(Dest, Request, ?STORE); 
+			post_batch(Dest); 
 		_ -> {405, [], []}
 	end.
 	
-handle_put(Request) ->
+handle_put() ->
 	case lists:reverse(Request#request.path) of
 		[] -> 
 			{405, [], []};
 		Destination when is_list(Destination) ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
-			create_destination(Dest, Request, ?STORE);
+			create_destination(Dest);
 		_ -> 
 			{501, [], []}
 
 	end.	
 	
 %% Private API Implementation
-get_message(MessageId, _Request, Store) ->
+get_message(MessageId) ->
 	case yarmo_message:find(Store, MessageId) of
 		not_found ->
 			{404, [], []};
@@ -75,11 +68,11 @@ get_message(MessageId, _Request, Store) ->
 			{200, Message#message.headers, Message#message.body}	
 	end.	
 	
-get_batch(_Destination, _Id, _Request) ->
+get_batch(_Destination, _Id) ->
 	{501, [], []}.	
 	
 %% Relationships
-get_relationships({topics, Topic}, Request, Store) ->
+get_relationships({topics, Topic}) ->
 	Relationships = [
 		{{rel, "post-message"}, {path, "incoming"}},
 		{{rel, "post-batch"}, {path, "incoming/batches"}},
@@ -90,9 +83,9 @@ get_relationships({topics, Topic}, Request, Store) ->
 		{{rel, "first-batch"}, {path, "poller/batches/first"}},
 		{{rel, "last-batch"}, {path, "poller/batches/last"}}
 	],	
-	get_relationships(Relationships, #destination{type = "topic", name = Topic}, Request, Store);
+	get_relationships(Relationships, #destination{type = "topic", name = Topic});
 	
-get_relationships({queues, Queue}, Request, Store) ->
+get_relationships({queues, Queue}) ->
 	Relationships = [
 		{{rel, "post-message"}, {path, "incoming"}},
 		{{rel, "post-batch"}, {path, "incoming/batches"}},
@@ -100,9 +93,9 @@ get_relationships({queues, Queue}, Request, Store) ->
 		{{rel, "post-batch-once"}, {path, "batches"}},
 		{{rel, "poller"}, {path, "poller"}}
 	],	
-	get_relationships(Relationships, #destination{type = "queue", name = Queue}, Request, Store).
+	get_relationships(Relationships, #destination{type = "queue", name = Queue}).
 	
-get_relationships(Relationships, #destination{name = DestName} = Destination, Request, Store) ->
+get_relationships(Relationships, #destination{name = DestName} = Destination) ->
 	case yarmo_destination:find(Store, Destination) of
 		not_found ->
 			{404, [], []};
@@ -121,52 +114,53 @@ get_relationships(Relationships, #destination{name = DestName} = Destination, Re
 	end.	
 			
 %% Messages
-post_message({topics, Topic}, Request, Store) ->
+post_message({topics, Topic}) ->
 	Destination = #destination{type = "topic", name = Topic},
-	post_message(Destination, location_url(Request#request.context_root, Topic), Request, Store);
+	post_message(Destination, location_url(Request#request.context_root, Topic));
 
-post_message({queues, Queue}, Request, Store) ->
+post_message({queues, Queue}) ->
 	Destination = #destination{type = "queue", name = Queue},
-	post_message(Destination, location_url(Request#request.context_root, Queue), Request, Store).
+	post_message(Destination, location_url(Request#request.context_root, Queue)).
 
-post_message(#destination{} = Destination, MessageUrlFun, Request, Store) ->
+post_message(#destination{} = Destination, MessageUrlFun) ->
 	Dest = yarmo_destination:ensure_exist(Store, Destination),
-	Msg = create_message(Dest, Request, Store),
+	Msg = create_message(Dest, Request),
 	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
 
-create_message(#destination{} = Dest, Request, Store) ->
+create_message(#destination{} = Dest, #request{} = Req) ->
 	Document = #message {
 		destination = Dest#destination.id, 
 		max_ttl     = Dest#destination.max_ttl, 
-		headers     = Request#request.headers,
-		body        = Request#request.body
+		headers     = Req#request.headers,
+		body        = Req#request.body
 	}, 
 	yarmo_message:create(Store, Document).
 
 %% Message Batches	
-post_batch({topics, Topic}, Request, Store) ->
+post_batch({topics, Topic}) ->
 	Destination = #destination{type = "topic", name = Topic},
-	post_batch(Destination, location_url(Request#request.context_root, Topic), Request, Store);
+	post_batch(Destination, location_url(Request#request.context_root, Topic));
 
-post_batch({queues, Queue}, Request, Store) ->
+post_batch({queues, Queue}) ->
 	Destination = #destination{type = "queue", name = Queue},
-	post_batch(Destination, location_url(Request#request.context_root, Queue), Request, Store).
+	post_batch(Destination, location_url(Request#request.context_root, Queue)).
 
-post_batch(#destination{} = Destination, UrlFun, Request, Store) ->
+post_batch(#destination{} = Destination, UrlFun) ->
 	Dest = yarmo_destination:ensure_exist(Store, Destination),
 
 	Batch = yarmo_message:create_batch(Store, #batch{destination = Dest#destination.id, max_ttl = Dest#destination.max_ttl}),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
-		Msg = create_message(Dest, MsgReq, Store),
+		Msg = create_message(Dest, MsgReq),
 		[UrlFun(message, Msg#message.id) | Acc]
 	end,	
-	Body = lists:foldr(MsgFun, [], parse_batch_body(Request)),
+	Body = lists:foldr(MsgFun, [], parse_batch_body()),
 	
 	{201, [{'Content-Type', "text/uri-list"}, {'Location', UrlFun(batch, Batch#batch.id)}], string:join(Body, "\r\n") }.			
 
 %% For now only parse multipart request. Need to implement atom feed parser.
-parse_batch_body(#request{headers = Headers} = Request) ->
+parse_batch_body() ->
+	#request{headers = Headers} = Request,
 	case get_header('Content-Type', unknown, Headers) of
 		unknown -> [];
 		[$m,$u,$l,$t,$i,$p,$a,$r,$t,$/ | _] -> yarmo_web_multipart:parse_multipart_request(Request);
@@ -174,13 +168,13 @@ parse_batch_body(#request{headers = Headers} = Request) ->
 	end.	
 
 %% Destinations	
-create_destination({topics, Topic}, Request, Store) ->
-	create_destination(#destination{type = "topic", name = Topic}, Request, Store);
+create_destination({topics, Topic}) ->
+	create_destination(#destination{type = "topic", name = Topic});
 
-create_destination({queues, Queue}, Request, Store) ->
-	create_destination(#destination{type = "queue", name = Queue}, Request, Store);
+create_destination({queues, Queue}) ->
+	create_destination(#destination{type = "queue", name = Queue});
 
-create_destination(#destination{} = Destination, Request, Store) ->
+create_destination(#destination{} = Destination) ->
 	Header = fun(Name, Default) -> 
 		Value = integer_to_list(Default),
 		list_to_integer(get_header(Name, Value, Request#request.headers)) 
@@ -218,10 +212,22 @@ link_header_builder(Relationships, ContextRoot) ->
 
 	
 get_header(Name, Default, Headers) ->
-	case lists:keysearch(Name, 1, Headers) of
-		{value, {Name, Value}}  -> Value;
-		_ -> Default	
-	end.
+	Fun = fun(Key, Res) ->
+		case lists:keysearch(Key, 1, Headers) of
+			{value, {Key, Value}}  -> Value;
+			_ -> Res	
+		end
+	end,	
+	Convertion = if 
+		is_atom(Name)   -> atom_to_list; 
+		is_binary(Name) -> binary_to_list;
+		true -> list_to_atom 
+	end,
+	
+	case Fun(Name, not_found) of
+		not_found -> Fun(erlang:Convertion(Name), Default);
+		Value -> Value
+	end.	
 
 location_url(ContextRoot, Destination) ->
 	fun(Type, Id) ->

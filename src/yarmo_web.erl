@@ -19,12 +19,13 @@ stop() ->
 
 loop(Req, _DocRoot) ->
 	RequestData = request_data(Req),
-	RequestHandeler = yarmo_web_handler, 
 
 	case RequestData#request.path of
       [Type | Path] when Type =:= "topics"; Type =:= "queues" ->
-		Response = RequestHandeler:handle(RequestData#request{context_root = Type, path = Path}),
-		Req:respond(Response);
+	
+		Handeler = yarmo_web_handler:new(RequestData#request{context_root = Type, path = Path}, yarmo_store), 
+		Req:respond(Handeler:handle());
+
        _ ->
 		case RequestData#request.method of
 			Method when Method =:= 'GET'; Method =:= 'HEAD' ->
@@ -54,6 +55,6 @@ request_data(Req) ->
 		peer = Req:get(peer),
 		params = Req:parse_qs(),
 		headers = mochiweb_headers:to_list(Req:get(headers)),
-		cookies = {cookies, Req:parse_cookie()},
+		cookies = Req:parse_cookie(),
 		body = Body
 	}.	
