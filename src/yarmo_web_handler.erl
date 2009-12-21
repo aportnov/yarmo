@@ -33,17 +33,17 @@ handle_get()	->
 			{404, [], []};
 		Destination ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
-			get_relationships(Dest)
+			with_destination(Dest, fun(_D) -> (get_relationships(Dest)) end)
 	end.		
 
 handle_post() ->	
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Destination] -> 
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
-			post_message(Dest);
+			with_destination(Dest, fun(D) -> (post_message(D)) end);
 		["batches", "incomming" | Destination] ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
-			post_batch(Dest); 
+			with_destination(Dest, fun(D) -> (post_batch(D)) end);
 		_ -> {405, [], []}
 	end.
 	
@@ -53,7 +53,9 @@ handle_put() ->
 			{405, [], []};
 		Destination when is_list(Destination) ->
 			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
-			create_destination(Dest);
+			FoundCallback = fun(_D) -> ({204, [], []}) end,	
+			NotFoundCallback = fun(D) -> (create_destination(D)) end,
+			with_destination(Dest, FoundCallback, NotFoundCallback);
 		_ -> 
 			{501, [], []}
 
@@ -95,36 +97,24 @@ get_relationships({queues, Queue}) ->
 	],	
 	get_relationships(Relationships, #destination{type = "queue", name = Queue}).
 	
-get_relationships(Relationships, #destination{name = DestName} = Destination) ->
-	case yarmo_destination:find(Store, Destination) of
-		not_found ->
-			{404, [], []};
-		_Dest ->	
-			HostHeader = get_header('Host', [], Request#request.headers),
+get_relationships(Relationships, #destination{name = DestName}) ->
+	HostHeader = get_header('Host', [], Request#request.headers),
 
-			Builder = link_header_builder(Relationships, Request#request.context_root),	
-			LinkHeader = Builder(DestName, HostHeader),
-			Headers = [
-				LinkHeader,
-				{'Cache-Control', "public, max-age=\"86400\""},
-				{'Expires', expires_header(erlang:universaltime(), 86400)},
-				{'ETag', make_etag(LinkHeader)}
-			],
-			{200, Headers, []}
-	end.	
+	Builder = link_header_builder(Relationships, Request#request.context_root),	
+	LinkHeader = Builder(DestName, HostHeader),
+	Headers = [
+		LinkHeader,
+		{'Cache-Control', "public, max-age=\"86400\""},
+		{'Expires', expires_header(erlang:universaltime(), 86400)},
+		{'ETag', make_etag(LinkHeader)}
+	],
+	{200, Headers, []}.
 			
 %% Messages
-post_message({topics, Topic}) ->
-	Destination = #destination{type = "topic", name = Topic},
-	post_message(Destination, location_url(Request#request.context_root, Topic));
+post_message(#destination{name = Name} = Destination) ->
+	MessageUrlFun = location_url(Name),
 
-post_message({queues, Queue}) ->
-	Destination = #destination{type = "queue", name = Queue},
-	post_message(Destination, location_url(Request#request.context_root, Queue)).
-
-post_message(#destination{} = Destination, MessageUrlFun) ->
-	Dest = yarmo_destination:ensure_exist(Store, Destination),
-	Msg = create_message(Dest, Request),
+	Msg = create_message(Destination, Request),
 	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
 
 create_message(#destination{} = Dest, #request{} = Req) ->
@@ -137,21 +127,13 @@ create_message(#destination{} = Dest, #request{} = Req) ->
 	yarmo_message:create(Store, Document).
 
 %% Message Batches	
-post_batch({topics, Topic}) ->
-	Destination = #destination{type = "topic", name = Topic},
-	post_batch(Destination, location_url(Request#request.context_root, Topic));
+post_batch(#destination{name = Name} = Destination) ->
+	UrlFun = location_url(Name),
 
-post_batch({queues, Queue}) ->
-	Destination = #destination{type = "queue", name = Queue},
-	post_batch(Destination, location_url(Request#request.context_root, Queue)).
-
-post_batch(#destination{} = Destination, UrlFun) ->
-	Dest = yarmo_destination:ensure_exist(Store, Destination),
-
-	Batch = yarmo_message:create_batch(Store, #batch{destination = Dest#destination.id, max_ttl = Dest#destination.max_ttl}),
+	Batch = yarmo_message:create_batch(Store, #batch{destination = Destination#destination.id, max_ttl = Destination#destination.max_ttl}),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
-		Msg = create_message(Dest, MsgReq),
+		Msg = create_message(Destination, MsgReq),
 		[UrlFun(message, Msg#message.id) | Acc]
 	end,	
 	Body = lists:foldr(MsgFun, [], parse_batch_body()),
@@ -168,12 +150,6 @@ parse_batch_body() ->
 	end.	
 
 %% Destinations	
-create_destination({topics, Topic}) ->
-	create_destination(#destination{type = "topic", name = Topic});
-
-create_destination({queues, Queue}) ->
-	create_destination(#destination{type = "queue", name = Queue});
-
 create_destination(#destination{} = Destination) ->
 	Header = fun(Name, Default) -> 
 		Value = integer_to_list(Default),
@@ -182,17 +158,28 @@ create_destination(#destination{} = Destination) ->
 	
 	MaxTtl = Header("Message-Max-Ttl", Destination#destination.max_ttl),
 	ReplyTime = Header("Message-Reply-Time", Destination#destination.reply_time),
+	Dest = yarmo_destination:create(Store, Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
 
+	{201, [ {'Location', destination_url(Destination#destination.name)}, 
+			{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
+			{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []}.
+
+%% Filters
+with_destination(Destination, FoundCallback) ->
+	NotFoundCallback = fun(_D) -> ({404, [], []}) end,
+	with_destination(Destination, FoundCallback, NotFoundCallback).
+
+with_destination({topics, Topic}, FoundCallback, NotFoundCallback) ->
+	with_destination(#destination{type = "topic", name = Topic}, FoundCallback, NotFoundCallback);
+	
+with_destination({queues, Queue}, FoundCallback, NotFoundCallback) ->
+	with_destination(#destination{type = "queue", name = Queue}, FoundCallback, NotFoundCallback);
+
+with_destination(#destination{} = Destination, FoundCallback, NotFoundCallback) ->
 	case yarmo_destination:find(Store, Destination) of
-		not_found ->
-			Dest = yarmo_destination:create(Store, Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
-			Location = destination_url(Request#request.context_root, Destination#destination.name),
-			{201, [ {'Location', Location}, 
-					{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
-					{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []};
-		_Dest ->
-			{204, [], []}
-	end.		
+		not_found -> NotFoundCallback(Destination);
+		Dest      -> FoundCallback(Dest)
+	end.
 
 %% Utility Functions
 
@@ -229,18 +216,18 @@ get_header(Name, Default, Headers) ->
 		Value -> Value
 	end.	
 
-location_url(ContextRoot, Destination) ->
+location_url(Destination) ->
 	fun(Type, Id) ->
 		Suffix = case Type of
 			message -> "/messages/";
 			batch   -> "/batches/";
 			_       -> "/"
 		end,
-		destination_url(ContextRoot, Destination) ++ Suffix ++ Id	
+		destination_url(Destination) ++ Suffix ++ Id	
 	end.	
 	
-destination_url(ContextRoot, Destination) ->
-	"/" ++ ContextRoot ++ "/" ++ string:join(Destination, "/").		
+destination_url(Destination) ->
+	"/" ++ Request#request.context_root ++ "/" ++ string:join(Destination, "/").		
 	
 expires_header(DateTime, TtlSeconds) ->
 	Sec = calendar:datetime_to_gregorian_seconds(DateTime),
