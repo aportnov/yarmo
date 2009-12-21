@@ -32,18 +32,16 @@ handle_get()	->
 		[] ->
 			{404, [], []};
 		Destination ->
-			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
-			with_destination(Dest, fun(_D) -> (get_relationships(Dest)) end)
+			Dest = name_to_destination(lists:reverse(Destination)),
+			with_destination(Dest#destination.name, fun(_D) -> (get_relationships(Dest)) end)
 	end.		
 
 handle_post() ->	
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Destination] -> 
-			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
-			with_destination(Dest, fun(D) -> (post_message(D)) end);
+			with_destination(lists:reverse(Destination), fun(D) -> (post_message(D)) end);
 		["batches", "incomming" | Destination] ->
-			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) },
-			with_destination(Dest, fun(D) -> (post_batch(D)) end);
+			with_destination(lists:reverse(Destination), fun(D) -> (post_batch(D)) end);
 		_ -> {405, [], []}
 	end.
 	
@@ -52,10 +50,9 @@ handle_put() ->
 		[] -> 
 			{405, [], []};
 		Destination when is_list(Destination) ->
-			Dest = { ?l2a(Request#request.context_root), lists:reverse(Destination) }, 
 			FoundCallback = fun(_D) -> ({204, [], []}) end,	
 			NotFoundCallback = fun(D) -> (create_destination(D)) end,
-			with_destination(Dest, FoundCallback, NotFoundCallback);
+			with_destination(lists:reverse(Destination), FoundCallback, NotFoundCallback);
 		_ -> 
 			{501, [], []}
 
@@ -74,7 +71,7 @@ get_batch(_Destination, _Id) ->
 	{501, [], []}.	
 	
 %% Relationships
-get_relationships({topics, Topic}) ->
+get_relationships(#destination{type = "topic"} = Destination) ->
 	Relationships = [
 		{{rel, "post-message"}, {path, "incoming"}},
 		{{rel, "post-batch"}, {path, "incoming/batches"}},
@@ -85,9 +82,9 @@ get_relationships({topics, Topic}) ->
 		{{rel, "first-batch"}, {path, "poller/batches/first"}},
 		{{rel, "last-batch"}, {path, "poller/batches/last"}}
 	],	
-	get_relationships(Relationships, #destination{type = "topic", name = Topic});
+	get_relationships(Relationships, Destination);
 	
-get_relationships({queues, Queue}) ->
+get_relationships(#destination{type = "queue"} = Destination) ->
 	Relationships = [
 		{{rel, "post-message"}, {path, "incoming"}},
 		{{rel, "post-batch"}, {path, "incoming/batches"}},
@@ -95,7 +92,7 @@ get_relationships({queues, Queue}) ->
 		{{rel, "post-batch-once"}, {path, "batches"}},
 		{{rel, "poller"}, {path, "poller"}}
 	],	
-	get_relationships(Relationships, #destination{type = "queue", name = Queue}).
+	get_relationships(Relationships, Destination).
 	
 get_relationships(Relationships, #destination{name = DestName}) ->
 	HostHeader = get_header('Host', [], Request#request.headers),
@@ -158,6 +155,7 @@ create_destination(#destination{} = Destination) ->
 	
 	MaxTtl = Header("Message-Max-Ttl", Destination#destination.max_ttl),
 	ReplyTime = Header("Message-Reply-Time", Destination#destination.reply_time),
+	
 	Dest = yarmo_destination:create(Store, Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
 
 	{201, [ {'Location', destination_url(Destination#destination.name)}, 
@@ -165,23 +163,27 @@ create_destination(#destination{} = Destination) ->
 			{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []}.
 
 %% Filters
-with_destination(Destination, FoundCallback) ->
+with_destination(Name, FoundCallback) ->
 	NotFoundCallback = fun(_D) -> ({404, [], []}) end,
-	with_destination(Destination, FoundCallback, NotFoundCallback).
+	with_destination(Name, FoundCallback, NotFoundCallback).
 
-with_destination({topics, Topic}, FoundCallback, NotFoundCallback) ->
-	with_destination(#destination{type = "topic", name = Topic}, FoundCallback, NotFoundCallback);
+with_destination(Name, FoundCallback, NotFoundCallback) ->
+	Destination = name_to_destination(Name),
 	
-with_destination({queues, Queue}, FoundCallback, NotFoundCallback) ->
-	with_destination(#destination{type = "queue", name = Queue}, FoundCallback, NotFoundCallback);
-
-with_destination(#destination{} = Destination, FoundCallback, NotFoundCallback) ->
 	case yarmo_destination:find(Store, Destination) of
 		not_found -> NotFoundCallback(Destination);
 		Dest      -> FoundCallback(Dest)
 	end.
 
 %% Utility Functions
+
+name_to_destination(Name) ->
+	Type = case ?l2a(Request#request.context_root) of
+		queues -> "queue";
+		topics -> "topic"
+	end,
+	#destination{type = Type, name = Name}.
+	
 
 link_header_builder(Relationships, ContextRoot) ->
 	fun(Destination, Host) ->
