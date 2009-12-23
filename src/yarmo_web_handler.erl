@@ -33,15 +33,15 @@ handle_get()	->
 			{404, [], []};
 		Destination ->
 			Dest = name_to_destination(lists:reverse(Destination)),
-			with_destination(Dest#destination.name, fun(_D) -> (get_relationships(Dest)) end)
+			with_destination(Dest#destination.name, fun(_D) -> get_relationships(Dest) end)
 	end.		
 
 handle_post() ->	
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Destination] -> 
-			with_destination(lists:reverse(Destination), fun(D) -> (post_message(D)) end);
+			with_destination(lists:reverse(Destination), fun(D) -> post_message(D) end);
 		["batches", "incomming" | Destination] ->
-			with_destination(lists:reverse(Destination), fun(D) -> (post_batch(D)) end);
+			with_destination(lists:reverse(Destination), fun(D) -> post_batch(D) end);
 		_ -> {405, [], []}
 	end.
 	
@@ -50,8 +50,8 @@ handle_put() ->
 		[] -> 
 			{405, [], []};
 		Destination when is_list(Destination) ->
-			FoundCallback = fun(_D) -> ({204, [], []}) end,	
-			NotFoundCallback = fun(D) -> (create_destination(D)) end,
+			FoundCallback = fun(_D) -> {204, [], []} end,	
+			NotFoundCallback = fun(D) -> create_destination(D) end,
 			with_destination(lists:reverse(Destination), FoundCallback, NotFoundCallback);
 		_ -> 
 			{501, [], []}
@@ -164,8 +164,7 @@ create_destination(#destination{} = Destination) ->
 
 %% Filters
 with_destination(Name, FoundCallback) ->
-	NotFoundCallback = fun(_D) -> ({404, [], []}) end,
-	with_destination(Name, FoundCallback, NotFoundCallback).
+	with_destination(Name, FoundCallback, fun(_D) -> {404, [], []} end).
 
 with_destination(Name, FoundCallback, NotFoundCallback) ->
 	Destination = name_to_destination(Name),
