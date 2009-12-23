@@ -8,6 +8,8 @@
 
 -include("yarmo.hrl").
 
+-define(util, yarmo_bin_util).
+
 %% Public API
 parse_multipart_request(#request{body = Body} = Request) when is_list(Body) ->
 	parse_multipart_request(Request#request{body = ?l2b(Body)});
@@ -17,8 +19,7 @@ parse_multipart_request(#request{body = B} = Request) ->
 		not_found -> [];
 		Value ->
 			Boundary = ?l2b(Value),
-			Mod = yarmo_bin_util,
-			Body = Mod:bin_replace(Mod:bin_replace(B, <<"\\r">>, <<"\r">>), <<"\\n">>, <<"\n">>),
+			Body = ?util:bin_replace(?util:bin_replace(B, <<"\\r">>, <<"\r">>), <<"\\n">>, <<"\n">>),
 			parser_multipart_request(fix_incomplite_body(Body, Boundary), Boundary)
 	end.		
 
@@ -26,21 +27,21 @@ parse_multipart_request(#request{body = B} = Request) ->
 
 parser_multipart_request(Body, Boundary) ->
 	BS = byte_size(Boundary),
-	RequestBody = case yarmo_bin_util:bin_find(<<"\r\n--", Boundary:BS/binary, "--\r\n">>, Body) of
+	RequestBody = case ?util:bin_find(<<"\r\n--", Boundary:BS/binary, "--\r\n">>, Body) of
 		{exact, Index} ->
 			<<B:Index/binary, _/binary>> = Body,
 			B;
 		_ -> <<>>
 	end,
 	
-	Requests = yarmo_bin_util:bin_split(<<"--", Boundary:BS/binary, "\r\n">>, RequestBody),
+	Requests = ?util:bin_split(<<"--", Boundary:BS/binary, "\r\n">>, RequestBody),
 	Fun = fun(ReqBin, Acc) ->
 		[parse_request_part(ReqBin) | Acc]
 	end,
 	lists:foldr(Fun, [], Requests).			
 
 parse_request_part(Binary) ->
-	[Body | Headers] = lists:reverse(yarmo_bin_util:bin_split(<<"\r\n">>, Binary)),
+	[Body | Headers] = lists:reverse(?util:bin_split(<<"\r\n">>, Binary)),
 
 	Fun = fun(Line, Acc) -> 
 		[split_header(Line) | Acc]
