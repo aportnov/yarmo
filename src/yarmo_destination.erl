@@ -17,7 +17,7 @@ create(Store, #destination{type = Type, name = Name} = Destination) ->
 		{?l2b("name"), ?l2b(string:join(Name, "."))},
 		{?l2b("max_ttl"), Destination#destination.max_ttl},
 		{?l2b("reply_time"), Destination#destination.reply_time},
-		{?l2b("created_timestamp"), calendar:datetime_to_gregorian_seconds(erlang:universaltime())}
+		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	Key = generate_key(Type, Name),
 	Store:create(Key, Document),

@@ -4,6 +4,8 @@
 -define(a2b(V), atom_to_binary(V, utf8)).
 -define(l2a(V), list_to_atom(V)).
 
+-define(timestamp(), calendar:datetime_to_gregorian_seconds(erlang:universaltime())).
+
 -define(DATABASE_NAME, "erlymessage").
 
 -define(DB_READ(Database, Key), couchdb:retrieve_document(Database, Key)).

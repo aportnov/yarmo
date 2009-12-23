@@ -17,7 +17,7 @@ create(Store, #message{} = Message) ->
 		{?l2b("max_ttl"), Message#message.max_ttl },
 		{?l2b("headers"), headers2json(filter_entity_headers(Message#message.headers)) },
 		{?l2b("body"), Message#message.body },
-		{?l2b("created_timestamp"), calendar:datetime_to_gregorian_seconds(erlang:universaltime())}
+		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	{{id, Id}, {rev, _}} = Store:create(Document),
 	doc2message(Store, [{<<"_id">>, Id} | Document]).	
@@ -33,7 +33,7 @@ create_batch(Store, #batch{} = Batch) ->
 		{?l2b("type"), ?l2b("batch")},
 		{?l2b("destination"), ?l2b(Batch#batch.destination) },
 		{?l2b("max_ttl"), Batch#batch.max_ttl },
-		{?l2b("created_timestamp"), calendar:datetime_to_gregorian_seconds(erlang:universaltime())}
+		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	{{id, Id}, {rev, _}} = Store:create(Document),
 	doc2batch(Store, [{<<"_id">>, Id} | Document]).	
