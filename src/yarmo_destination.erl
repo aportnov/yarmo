@@ -22,7 +22,7 @@ create(Store, #destination{type = Type, name = Name} = Destination) ->
 	Key = generate_key(Type, Name),
 	Store:create(Key, Document),
 	
-	doc2dest(Store, [{<<"_id">>, ?l2b(Key)} | Document]).
+	doc2dest(Store, [{<<"_id">>, Key} | Document]).
 
 generate_key(Type, Name) ->
 	Type ++ ":" ++ string:join(Name, ".").	
