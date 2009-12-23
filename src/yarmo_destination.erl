@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([find/2, create/2, ensure_exist/2, generate_key/2]).
+-export([find/2, create/2, generate_key/2]).
 
 find(Store, #destination{type = Type, name = Name}) ->
 	case Store:read(generate_key(Type, Name)) of
@@ -24,27 +24,21 @@ create(Store, #destination{type = Type, name = Name} = Destination) ->
 	
 	doc2dest(Store, [{<<"_id">>, ?l2b(Key)} | Document]).
 
-ensure_exist(Store, #destination{} = Destination) ->
-	case ?MODULE:find(Store, Destination) of
-		not_found -> ?MODULE:create(Store, Destination);
-		Dest -> Dest	
-	end.
-	
 generate_key(Type, Name) ->
 	Type ++ ":" ++ string:join(Name, ".").	
 
 doc2dest(Store, Doc) ->
-	BinFun = fun(Name) ->
-		case Name of
+	BinFun = fun(Value) ->
+		case Value of
 			Bin when is_binary(Bin) -> ?b2l(Bin);
 			Any -> Any
 		end	
 	end,	
 	
 	#destination{
-		id                = BinFun(Store:get_value(Doc, "_id")),
-		type              = BinFun(Store:get_value(Doc, "type")),
-		name              = string:tokens(BinFun(Store:get_value(Doc, "name")), "."),
-		max_ttl           = Store:get_value(Doc, "max_ttl"),
-		reply_time        = Store:get_value(Doc, "reply_time")
+		id         = BinFun(Store:get_value(Doc, "_id")),
+		type       = BinFun(Store:get_value(Doc, "type")),
+		name       = string:tokens(BinFun(Store:get_value(Doc, "name")), "."),
+		max_ttl    = Store:get_value(Doc, "max_ttl"),
+		reply_time = Store:get_value(Doc, "reply_time")
 	}.	
