@@ -19,7 +19,7 @@ create_queue_test() ->
 	#destination{
 		id = "queue:sample.queue.example",
 		type = "queue",
-		name = "sample.queue.example",
+		name = ["sample","queue", "example"],
 		max_ttl = 800,
 		reply_time = 60
 	} = ?TEST_MOD:create(Store, Dest).
@@ -31,7 +31,7 @@ create_topic_test() ->
 	#destination{
 		id = "topic:sample.topic.example",
 		type = "topic",
-		name = "sample.topic.example",
+		name = ["sample", "topic", "example"],
 		max_ttl = 2800,
 		reply_time = 200
 	} = ?TEST_MOD:create(Store, Dest).
@@ -60,7 +60,7 @@ find_destination_test() ->
 	#destination{
 		id = "queue:sample.queue.example",
 		type = "queue",
-		name = "sample.queue.example",
+		name = ["sample","queue", "example"],
 		max_ttl = 300,
 		reply_time = 500
 	} = ?TEST_MOD:find(Store, Dest).	

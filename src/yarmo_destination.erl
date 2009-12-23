@@ -34,10 +34,17 @@ generate_key(Type, Name) ->
 	Type ++ ":" ++ string:join(Name, ".").	
 
 doc2dest(Store, Doc) ->
+	BinFun = fun(Name) ->
+		case Name of
+			Bin when is_binary(Bin) -> ?b2l(Bin);
+			Any -> Any
+		end	
+	end,	
+	
 	#destination{
-		id                = ?b2l(Store:get_value(Doc, "_id")),
-		type              = ?b2l(Store:get_value(Doc, "type")),
-		name              = ?b2l(Store:get_value(Doc, "name")),
+		id                = BinFun(Store:get_value(Doc, "_id")),
+		type              = BinFun(Store:get_value(Doc, "type")),
+		name              = string:tokens(BinFun(Store:get_value(Doc, "name")), "."),
 		max_ttl           = Store:get_value(Doc, "max_ttl"),
 		reply_time        = Store:get_value(Doc, "reply_time")
 	}.	

@@ -4,7 +4,7 @@
 -export([handle/0]).
 
 %% Export for testing
--export([link_header_builder/2, get_header/3, expires_header/2, make_etag/1]).
+-export([link_header_builder/1, get_header/3, expires_header/2, make_etag/1]).
 
 -include("yarmo.hrl").
 
@@ -33,7 +33,7 @@ handle_get()	->
 			{404, [], []};
 		Destination ->
 			Dest = name_to_destination(lists:reverse(Destination)),
-			with_destination(Dest#destination.name, fun(_D) -> get_relationships(Dest) end)
+			with_destination(Dest#destination.name, fun(D) -> get_relationships(D) end)
 	end.		
 
 handle_post() ->	
@@ -96,8 +96,7 @@ get_relationships(#destination{type = "queue"} = Destination) ->
 	
 get_relationships(Relationships, #destination{name = DestName}) ->
 	HostHeader = get_header('Host', [], Request#request.headers),
-
-	Builder = link_header_builder(Relationships, Request#request.context_root),	
+	Builder = link_header_builder(Relationships),	
 	LinkHeader = Builder(DestName, HostHeader),
 	Headers = [
 		LinkHeader,
@@ -168,7 +167,6 @@ with_destination(Name, FoundCallback) ->
 
 with_destination(Name, FoundCallback, NotFoundCallback) ->
 	Destination = name_to_destination(Name),
-	
 	case yarmo_destination:find(Store, Destination) of
 		not_found -> NotFoundCallback(Destination);
 		Dest      -> FoundCallback(Dest)
@@ -184,10 +182,10 @@ name_to_destination(Name) ->
 	#destination{type = Type, name = Name}.
 	
 
-link_header_builder(Relationships, ContextRoot) ->
+link_header_builder(Relationships) ->
 	fun(Destination, Host) ->
-		BasePath = [ContextRoot | Destination],
-
+		BasePath = [Request#request.context_root | Destination],
+		
 		Fun = fun({{rel, Rel}, {path, Suffix}}, Acc) ->
 			Path = "/" ++ string:join(BasePath ++ [Suffix], "/"),
 			Link = "<http://" ++ Host ++ Path ++ ">; rel=\"" ++ Rel ++ "\"",

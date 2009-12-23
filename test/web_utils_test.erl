@@ -17,7 +17,7 @@ link_header_builder_test() ->
 		{{rel, "post-batch"}, {path, "incoming/batches"}}
 	],
 	
-	Builder = Mod:link_header_builder(Relationships, "topics"),
+	Builder = Mod:link_header_builder(Relationships),
 	
 	{'Link', 
 		"<http://host/topics/sample/incoming>; rel=\"post-message\"," ++ 
@@ -33,4 +33,4 @@ make_etag_test() ->
 	"\"57PUN57VQTDZC1BCHRIRIMC7H\"" = Mod:make_etag({'Link', "Sample Link"}). 	
 	
 handler_mod() ->
-	yarmo_web_handler:new(#request{}, mock_store:new({})).			
+	yarmo_web_handler:new(#request{context_root = "topics"}, mock_store:new({})).			
