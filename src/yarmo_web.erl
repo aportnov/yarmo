@@ -56,5 +56,5 @@ request_data(Req) ->
 		params = Req:parse_qs(),
 		headers = mochiweb_headers:to_list(Req:get(headers)),
 		cookies = Req:parse_cookie(),
-		body = Body
+		body = case Body of undefined -> <<>>; _ -> Body end
 	}.	

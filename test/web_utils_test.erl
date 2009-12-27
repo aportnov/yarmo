@@ -7,22 +7,9 @@
 get_header_test() ->
 	Mod = handler_mod(),
 	Headers = [{'Host', "www.sample.com"}, {'Cache-Control', "private max-age=20"}],
-	"www.sample.com" = Mod:get_header('Host', [], Headers),
-	"default" = Mod:get_header('Something', "default", Headers).
+	"www.sample.com" = Mod:get_option('Host', [], Headers),
+	"default" = Mod:get_option('Something', "default", Headers).
 	
-link_header_builder_test() ->
-	Mod = handler_mod(),
-	Relationships = [
-		{{rel, "post-message"}, {path, "incoming"}},
-		{{rel, "post-batch"}, {path, "incoming/batches"}}
-	],
-	
-	Builder = Mod:link_header_builder(Relationships),
-	
-	{'Link', 
-		"<http://host/topics/sample/incoming>; rel=\"post-message\"," ++ 
-		" <http://host/topics/sample/incoming/batches>; rel=\"post-batch\""} = Builder(["sample"], "host").
-
 expires_header_test() ->
 	Mod = handler_mod(),
 	DateTime = {{2009,12,19},{18,55,10}},

@@ -19,7 +19,10 @@ create(Store, #message{} = Message) ->
 		{?l2b("body"), Message#message.body },
 		{?l2b("created_timestamp"), ?timestamp()}
 	],
-	{{id, Id}, {rev, _}} = Store:create(Document),
+	{{id, Id}, {rev, _}} = case Message#message.id of
+		generated  -> Store:create(Document);
+		Key        -> Store:create(Key, Document)
+	end,	
 	doc2message(Store, [{<<"_id">>, Id} | Document]).	
 	
 find(Store, MessageId) ->
@@ -79,7 +82,12 @@ filter_entity_headers(Headers) ->
 	
 headers2json(Headers) ->
 	Fun = fun({Name, Value}, Acc) ->
-		[{struct, [{name, ?a2b(Name)}, {value, ?l2b(Value)}]} | Acc]
+		HeaderName = if
+			is_atom(Name) -> ?a2b(Name);
+			is_list(Name) -> ?l2b(Name);
+			true -> Name
+		end,	
+		[{struct, [{name, HeaderName}, {value, ?l2b(Value)}]} | Acc]
 	end,	
 	lists:reverse(lists:foldl(Fun, [], Headers)).
 

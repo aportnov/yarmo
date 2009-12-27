@@ -31,7 +31,7 @@ create_message_test() ->
 		headers = []
 	
 	} = ?TEST_MOD:create(Store, Message).
-	
+
 create_message_with_headers_test() ->
 	Store = mock_store:new({{read, unused}, {create, {{id, <<"message-id">>}, {rev, <<"rev">>}}} }),
 	

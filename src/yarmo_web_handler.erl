@@ -4,7 +4,7 @@
 -export([handle/0]).
 
 %% Export for testing
--export([link_header_builder/1, get_header/3, expires_header/2, make_etag/1]).
+-export([get_option/3, expires_header/2, make_etag/1]).
 
 -include("yarmo.hrl").
 
@@ -95,11 +95,15 @@ get_relationships(#destination{type = "queue"} = Destination) ->
 	get_relationships(Relationships, Destination).
 	
 get_relationships(Relationships, #destination{name = DestName}) ->
-	HostHeader = get_header('Host', [], Request#request.headers),
-	Builder = link_header_builder(Relationships),	
-	LinkHeader = Builder(DestName, HostHeader),
+	Fun = fun({{rel, Rel}, {path, Path}}, Acc) ->
+		Href = full_destination_url("http", DestName, Path),
+		[#link{rel = [Rel], href =  Href} | Acc]
+	end,	
+	Links = lists:foldr(Fun, [], Relationships),
+
+	LinkHeader = yarmo_link_util:link_header(Links),
 	Headers = [
-		LinkHeader,
+	    LinkHeader,
 		{'Cache-Control', "public, max-age=\"86400\""},
 		{'Expires', expires_header(erlang:universaltime(), 86400)},
 		{'ETag', make_etag(LinkHeader)}
@@ -113,12 +117,13 @@ post_message(#destination{name = Name} = Destination) ->
 	Msg = create_message(Destination, Request),
 	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
 
-create_message(#destination{} = Dest, #request{} = Req) ->
+create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = Headers, body = Body, params = Params}) ->
 	Document = #message {
-		destination = Dest#destination.id, 
-		max_ttl     = Dest#destination.max_ttl, 
-		headers     = Req#request.headers,
-		body        = Req#request.body
+		destination = DestId, 
+		max_ttl     = MaxTtl, 
+		headers     = Headers,
+		body        = Body,
+		id          = get_option('message_id', generated, Params)
 	}, 
 	yarmo_message:create(Store, Document).
 
@@ -139,7 +144,7 @@ post_batch(#destination{name = Name} = Destination) ->
 %% For now only parse multipart request. Need to implement atom feed parser.
 parse_batch_body() ->
 	#request{headers = Headers} = Request,
-	case get_header('Content-Type', unknown, Headers) of
+	case get_option('Content-Type', unknown, Headers) of
 		unknown -> [];
 		[$m,$u,$l,$t,$i,$p,$a,$r,$t,$/ | _] -> yarmo_web_multipart:parse_multipart_request(Request);
 		_ -> []
@@ -149,7 +154,7 @@ parse_batch_body() ->
 create_destination(#destination{} = Destination) ->
 	Header = fun(Name, Default) -> 
 		Value = integer_to_list(Default),
-		list_to_integer(get_header(Name, Value, Request#request.headers)) 
+		list_to_integer(get_option(Name, Value, Request#request.headers)) 
 	end,
 	
 	MaxTtl = Header("Message-Max-Ttl", Destination#destination.max_ttl),
@@ -181,25 +186,9 @@ name_to_destination(Name) ->
 	end,
 	#destination{type = Type, name = Name}.
 	
-
-link_header_builder(Relationships) ->
-	fun(Destination, Host) ->
-		BasePath = [Request#request.context_root | Destination],
-		
-		Fun = fun({{rel, Rel}, {path, Suffix}}, Acc) ->
-			Path = "/" ++ string:join(BasePath ++ [Suffix], "/"),
-			Link = "<http://" ++ Host ++ Path ++ ">; rel=\"" ++ Rel ++ "\"",
-			[Link | Acc]
-		end,
-		Link = string:join(lists:foldr(Fun, [], Relationships), ", "),
-		
-		{'Link', Link}
-	end.	
-
-	
-get_header(Name, Default, Headers) ->
+get_option(Name, Default, Options) ->
 	Fun = fun(Key, Res) ->
-		case lists:keysearch(Key, 1, Headers) of
+		case lists:keysearch(Key, 1, Options) of
 			{value, {Key, Value}}  -> Value;
 			_ -> Res	
 		end
@@ -226,7 +215,11 @@ location_url(Destination) ->
 	end.	
 	
 destination_url(Destination) ->
-	"/" ++ Request#request.context_root ++ "/" ++ string:join(Destination, "/").		
+	"/" ++ Request#request.context_root ++ "/" ++ string:join(Destination, "/").	
+
+full_destination_url(Scheme, DestName, Path) ->
+	Host = get_option('Host', [], Request#request.headers),
+	Scheme ++ "://" ++ Host ++ destination_url(DestName) ++ "/" ++ Path.		
 	
 expires_header(DateTime, TtlSeconds) ->
 	Sec = calendar:datetime_to_gregorian_seconds(DateTime),
