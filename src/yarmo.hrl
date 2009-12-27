@@ -23,3 +23,5 @@
 -record(batch, {destination, id, max_ttl, created_timestamp}).
 
 -record(link, {href, rel = ["alternate"], title, anchor, extensions = []}).
+
+-record(content, {type = "text/plain", src, body = [], summary = []}).

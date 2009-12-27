@@ -1,7 +1,7 @@
 -module(yarmo_web_atom).
 -author('author <alex.portnov@gmail.com>').
 
--export([parse_atom_request/1, parse_link/1, parse_id/1]).
+-export([parse_atom_request/1, parse_link/1, parse_id/1, parse_content/1]).
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -34,7 +34,26 @@ parse_id(#xmlElement{} = EntryNode)	->
 	[ #xmlText{value = Id} ] = xmerl_xpath:string("id/text()", EntryNode),
 	to_list(Id).
 
-
+parse_content(#xmlElement{} = EntryNode) ->
+	[ #xmlText{value = Summary} ] = xmerl_xpath:string("//summary/text()", EntryNode),	
+	Content = #content{summary = Summary},
+	
+	Fun = fun(#xmlAttribute{name = Name, value = Value}, C) ->
+		case Name of
+			src  -> C#content{src = to_list(Value)};
+			type -> C#content{type = to_list(Value)}
+		end	
+	end,	
+	
+	case xmerl_xpath:string("//content", EntryNode) of
+		[] -> Content;
+		[#xmlElement{content = ElmText, attributes = Attributes} | _] -> 
+		    Body = case ElmText of
+				[#xmlText{value = B}] -> B;
+				_ -> []
+			end,	
+			lists:foldl(Fun, Content#content{body = Body}, Attributes)		
+	end.	
 	
 %% Utility Functions
 

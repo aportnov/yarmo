@@ -38,6 +38,14 @@ entry_id_test_() ->
 		?_assertEqual("urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa8c", ?TEST_MOD:parse_id(E3))
 	].
 
+entry_content_test_() ->
+	[E1, E2, E3] = entries(mock_feed()),
+	[
+		?_assertEqual(#content{summary = "Some text.", type = "text/plain"}, ?TEST_MOD:parse_content(E1)),
+		?_assertEqual(#content{summary = "Some text.", type = "text", body = "Sample Text Content"}, ?TEST_MOD:parse_content(E2)),
+		?_assertEqual(#content{summary = "Some text.", type = "xml", src = "http://www.somelocation.com/cool-feed"}, ?TEST_MOD:parse_content(E3))
+	].	
+
 entries(Feed) ->
 	{ Xml, _Rest } = xmerl_scan:string(Feed),
 	xmerl_xpath:string("//entry", Xml).
