@@ -44,7 +44,36 @@ entry_content_test_() ->
 		?_assertEqual(#content{summary = "Some text.", type = "text/plain"}, ?TEST_MOD:parse_content(E1)),
 		?_assertEqual(#content{summary = "Some text.", type = "text", body = "Sample Text Content"}, ?TEST_MOD:parse_content(E2)),
 		?_assertEqual(#content{summary = "Some text.", type = "xml", src = "http://www.somelocation.com/cool-feed"}, ?TEST_MOD:parse_content(E3))
-	].	
+	].
+	
+parse_request_test_() ->
+	Request = #request{context_root = "queues", body = mock_feed()},
+	[R1, R2, R3] = ?TEST_MOD:parse_atom_request(Request),
+	[
+		fun() ->
+			#request{context_root = "queues", method = 'POST', params = Params, headers = Headers, body = []} = R1,
+			[{message_id, "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a"}] = Params,
+			[{'Content-Type', "text/plain"}, {'Message-Summary', "Some text."}, {'Link', Link}] = Headers,			
+			?assertEqual(Link, "<http://example.org/2003/12/13/atom03>; rel=\"alternate\"")
+		end,	
+		fun() ->
+			#request{context_root = "queues", method = 'POST', params = Params, headers = Headers, body = "Sample Text Content"} = R2,
+			[{message_id, "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa7b"}] = Params,
+			[{'Content-Type', "text"}, {'Message-Summary', "Some text."}, {'Link', Link}] = Headers,			
+			?assertEqual(Link, "<http://example.org/2003/12/13/atom04>; rel=\"related\"")
+		end,	
+		fun() ->
+			#request{context_root = "queues", method = 'POST', params = Params, headers = Headers, body = []} = R3,
+			[{message_id, "urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa8c"}] = Params,
+			[{'Content-Type', "xml"}, {'Message-Summary', "Some text."}, {'Link', Link}] = Headers,		
+			ExpectedLink = "<http://www.somelocation.com/cool-feed>; rel=\"self\", <http://example.org/2003/12/13/atom05>; rel=\"alternate\"; title=\"sample\"; type=\"application/xml\", <http://example.org/2003/12/13/atom07>; rel=\"related\"",	
+			?assertEqual(ExpectedLink, Link)
+		end
+
+	].
+		
+	
+%% Utility Functions.		
 
 entries(Feed) ->
 	{ Xml, _Rest } = xmerl_scan:string(Feed),

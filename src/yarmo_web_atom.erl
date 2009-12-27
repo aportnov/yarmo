@@ -7,8 +7,24 @@
 
 -include("yarmo.hrl").
 
-parse_atom_request(#request{body = Body} = Request) ->
-	[].
+parse_atom_request(#request{body = Body, context_root = ContextRoot}) ->
+	{ Xml, _Rest } = xmerl_scan:string(Body),
+	
+	Fun = fun(#xmlElement{} = EntryNode, Acc) ->
+		#content{type = Type, src = Src, body = MsgBody, summary = Summary} = parse_content(EntryNode),
+
+		Links = case Src of
+			undefined -> parse_link(EntryNode);
+			Href      -> [#link{href = Href, rel = ["self"]} | parse_link(EntryNode)]
+		end,
+		
+		Headers = [{'Content-Type', Type}, {'Message-Summary', Summary}, yarmo_link_util:link_header(Links)],	
+
+		[#request{context_root = ContextRoot, method = 'POST',
+		 	params = [{message_id, parse_id(EntryNode)}], headers = Headers, body = MsgBody} | Acc]
+	end,
+	
+	lists:foldr(Fun, [], xmerl_xpath:string("//entry", Xml)).
 
 parse_link(#xmlElement{} = EntryNode) ->
 	LinkNodes = xmerl_xpath:string("//link", EntryNode),
@@ -41,7 +57,8 @@ parse_content(#xmlElement{} = EntryNode) ->
 	Fun = fun(#xmlAttribute{name = Name, value = Value}, C) ->
 		case Name of
 			src  -> C#content{src = to_list(Value)};
-			type -> C#content{type = to_list(Value)}
+			type -> C#content{type = to_list(Value)};
+			_    -> C
 		end	
 	end,	
 	
