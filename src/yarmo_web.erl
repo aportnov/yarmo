@@ -31,7 +31,7 @@ loop(Req, _DocRoot) ->
 			Method when Method =:= 'GET'; Method =:= 'HEAD' ->
 				Req:not_found();
 			_ -> 
-				Req:respond({501, [], []})	
+				Req:respond({501, [], <<"Not Implemented.">>})	
 		end
 	end.	
 

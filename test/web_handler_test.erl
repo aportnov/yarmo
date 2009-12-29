@@ -34,7 +34,7 @@ get_message_not_found_test() ->
 	Store = mock_store:new({ {read, not_found}, {create, unused} }),
 	
 	Mod = handler_mod(Request, Store),
-	{404, [], []} = Mod:handle().
+	{404, [], _} = Mod:handle().
 
 %% GET/HEAD Relationships
 get_existing_queue_relationships_test() ->
@@ -65,7 +65,7 @@ get_nonexisting_queue_relationships_test() ->
 	Store = mock_store:new({{read, not_found}, {create, unused}}),
 	Mod = handler_mod(Request, Store),
 	
-	{404, [], []} = Mod:handle().
+	{404, [], _} = Mod:handle().
 
 %% PUT Create Destination
 put_create_new_destination_test() ->

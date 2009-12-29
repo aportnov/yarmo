@@ -18,7 +18,7 @@ handle() ->
 		'PUT' ->
 			handle_put();	
 		_ ->
-			{405, [], []}
+			{405, [], <<"Method Not Allowed.">>}
 	end.	
 
 %% Request Handlers
@@ -30,7 +30,7 @@ handle_get()	->
 		[BatchId, "batches" | Destination] ->
 			get_batch(lists:reverse(Destination), BatchId);
 		[] ->
-			{404, [], []};
+			{404, [], <<"Not Found.">>};
 		Destination ->
 			Dest = name_to_destination(lists:reverse(Destination)),
 			with_destination(Dest#destination.name, fun get_relationships/1)
@@ -42,19 +42,19 @@ handle_post() ->
 			with_destination(lists:reverse(Destination), fun post_message/1);
 		["batches", "incomming" | Destination] ->
 			with_destination(lists:reverse(Destination), fun post_batch/1);
-		_ -> {405, [], []}
+		_ -> {405, [], <<"Method Not Allowed.">>}
 	end.
 	
 handle_put() ->
 	case lists:reverse(Request#request.path) of
 		[] -> 
-			{405, [], []};
+			{405, [], <<"Method Not Allowed.">>};
 		Destination when is_list(Destination) ->
 			FoundCallback = fun(_D) -> {204, [], []} end,	
 			NotFoundCallback = fun create_destination/1,
 			with_destination(lists:reverse(Destination), FoundCallback, NotFoundCallback);
 		_ -> 
-			{501, [], []}
+			{501, [], <<"Not Implemented.">>}
 
 	end.	
 	
@@ -62,13 +62,13 @@ handle_put() ->
 get_message(MessageId) ->
 	case yarmo_message:find(Store, MessageId) of
 		not_found ->
-			{404, [], []};
+			{404, [], <<"Not Found.">>};
 		Message ->
 			{200, Message#message.headers, Message#message.body}	
 	end.	
 	
 get_batch(_Destination, _Id) ->
-	{501, [], []}.	
+	{501, [], <<"Not Implemented.">>}.	
 	
 %% Relationships
 get_relationships(#destination{type = "topic"} = Destination) ->
@@ -147,7 +147,9 @@ parse_batch_body() ->
 	case get_option('Content-Type', unknown, Headers) of
 		unknown -> [];
 		[$m,$u,$l,$t,$i,$p,$a,$r,$t,$/ | _] -> yarmo_web_multipart:parse_multipart_request(Request);
-		_ -> []
+		"application/atom+xml" -> yarmo_web_atom:parse_atom_request(Request);
+		Any -> 
+			?LOG("Unhandled Content:", [Any]), []
 	end.	
 
 %% Destinations	
@@ -168,7 +170,7 @@ create_destination(#destination{} = Destination) ->
 
 %% Filters
 with_destination(Name, FoundCallback) ->
-	with_destination(Name, FoundCallback, fun(_D) -> {404, [], []} end).
+	with_destination(Name, FoundCallback, fun(_D) -> {404, [], <<"Not Found.">>} end).
 
 with_destination(Name, FoundCallback, NotFoundCallback) ->
 	Destination = name_to_destination(Name),
