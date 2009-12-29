@@ -141,7 +141,6 @@ post_batch(#destination{name = Name} = Destination) ->
 	
 	{201, [{'Content-Type', "text/uri-list"}, {'Location', UrlFun(batch, Batch#batch.id)}], string:join(Body, "\r\n") }.			
 
-%% For now only parse multipart request. Need to implement atom feed parser.
 parse_batch_body() ->
 	#request{headers = Headers} = Request,
 	case get_option('Content-Type', unknown, Headers) of
