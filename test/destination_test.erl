@@ -5,15 +5,14 @@
 
 -include("../src/yarmo.hrl").
 
--define(TEST_MOD, yarmo_destination).
-
 generate_key_test() ->
-	"queue:sample.queue.example" = ?TEST_MOD:generate_key("queue", ["sample", "queue", "example"]),
-	"topic:sample.queue.example" = ?TEST_MOD:generate_key("topic", ["sample", "queue", "example"]),
-	"topic:sample" = ?TEST_MOD:generate_key("topic", ["sample"]).
+	Mod = test_mod(),
+	"queue:sample.queue.example" = Mod:generate_key("queue", ["sample", "queue", "example"]),
+	"topic:sample.queue.example" = Mod:generate_key("topic", ["sample", "queue", "example"]),
+	"topic:sample" = Mod:generate_key("topic", ["sample"]).
 	
 create_queue_test() ->
-	Store = mock_store:new([{create, {{id, "id"}, {rev, "Rev"}}}]),
+	Mod = test_mod([{create, {{id, "id"}, {rev, "Rev"}}}]),
 	Dest = #destination{type = "queue", name = ["sample", "queue", "example"], max_ttl = 800},
 	
 	#destination{
@@ -22,10 +21,10 @@ create_queue_test() ->
 		name = ["sample","queue", "example"],
 		max_ttl = 800,
 		reply_time = 60
-	} = ?TEST_MOD:create(Store, Dest).
+	} = Mod:create(Dest).
 	
 create_topic_test() ->
-	Store = mock_store:new([{create, {{id, "id"}, {rev, "Rev"}}}]),
+	Mod = test_mod([{create, {{id, "id"}, {rev, "Rev"}}}]),
 	Dest = #destination{type = "topic", name = ["sample", "topic", "example"], max_ttl = 2800, reply_time = 200},
 
 	#destination{
@@ -34,14 +33,14 @@ create_topic_test() ->
 		name = ["sample", "topic", "example"],
 		max_ttl = 2800,
 		reply_time = 200
-	} = ?TEST_MOD:create(Store, Dest).
+	} = Mod:create(Dest).
 
 find_destination_not_existing_test() ->
-	Store = mock_store:new([{read, not_found}]),
+	Mod = test_mod([{read, not_found}]),
 	
 	Dest = #destination{type = "topic", name = ["sample", "topic", "example"]},
 	
-	not_found = ?TEST_MOD:find(Store, Dest).
+	not_found = Mod:find(Dest).
 	
 find_destination_test() ->
 	Document = [
@@ -53,7 +52,7 @@ find_destination_test() ->
 		{?l2b("created_timestamp"), calendar:datetime_to_gregorian_seconds(erlang:universaltime())}
 	],
 	
-	Store = mock_store:new([{read, Document}]), 	
+	Mod = test_mod([{read, Document}]), 	
 			
 	Dest = #destination{type = "queue", name = ["sample", "queue", "example"]},
 
@@ -63,4 +62,11 @@ find_destination_test() ->
 		name = ["sample","queue", "example"],
 		max_ttl = 300,
 		reply_time = 500
-	} = ?TEST_MOD:find(Store, Dest).	
+	} = Mod:find(Dest).	
+
+test_mod() ->
+	test_mod([]).
+		
+test_mod(StoreOptions) ->
+	Store = mock_store:new(StoreOptions),
+	yarmo_destination:new(Store).	

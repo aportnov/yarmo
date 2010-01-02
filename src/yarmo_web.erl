@@ -23,7 +23,7 @@ loop(Req, _DocRoot) ->
 	case RequestData#request.path of
       [Type | Path] when Type =:= "topics"; Type =:= "queues" ->
 	
-		Handeler = yarmo_web_handler:new(RequestData#request{context_root = Type, path = Path}, yarmo_store), 
+		Handeler = handler(RequestData#request{context_root = Type, path = Path}), 
 		Req:respond(Handeler:handle());
 
        _ ->
@@ -58,3 +58,7 @@ request_data(Req) ->
 		cookies = Req:parse_cookie(),
 		body = case Body of undefined -> <<>>; _ -> Body end
 	}.	
+
+handler(#request{} = Request) ->
+	Store = yarmo_store,
+	yarmo_web_handler:new(Request, Store, yarmo_message:new(Store), yarmo_destination:new(Store)).		

@@ -20,4 +20,5 @@ make_etag_test() ->
 	"\"57PUN57VQTDZC1BCHRIRIMC7H\"" = Mod:make_etag({'Link', "Sample Link"}). 	
 	
 handler_mod() ->
-	yarmo_web_handler:new(#request{context_root = "topics"}, mock_store:new({})).			
+	Store = mock_store:new([]),
+	yarmo_web_handler:new(#request{context_root = "topics"}, Store, yarmo_message:new(Store), yarmo_destination:new(Store)).			

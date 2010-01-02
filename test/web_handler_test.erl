@@ -107,4 +107,4 @@ put_create_existing_destination_test() ->
 %% Helper Functions
 
 handler_mod(#request{} = Request, Store) ->	
-	yarmo_web_handler:new(Request, Store).
+	yarmo_web_handler:new(Request, Store, yarmo_message:new(Store), yarmo_destination:new(Store)).

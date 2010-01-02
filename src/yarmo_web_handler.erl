@@ -1,4 +1,4 @@
--module(yarmo_web_handler, [Request, Store]).
+-module(yarmo_web_handler, [Request, Store, MsgMod, DestMod]).
 -author('author <alex.portnov@gmail.com>').
 
 -export([handle/0]).
@@ -60,7 +60,7 @@ handle_put() ->
 	
 %% Private API Implementation
 get_message(MessageId) ->
-	case yarmo_message:find(Store, MessageId) of
+	case MsgMod:find(MessageId) of
 		not_found ->
 			{404, [], <<"Not Found.">>};
 		Message ->
@@ -125,13 +125,13 @@ create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = H
 		body        = Body,
 		id          = get_option('message_id', generated, Params)
 	}, 
-	yarmo_message:create(Store, Document).
+	MsgMod:create(Document).
 
 %% Message Batches	
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
 
-	Batch = yarmo_message:create_batch(Store, #batch{destination = Destination#destination.id, max_ttl = Destination#destination.max_ttl}),
+	Batch = MsgMod:create_batch(#batch{destination = Destination#destination.id, max_ttl = Destination#destination.max_ttl}),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
 		Msg = create_message(Destination, MsgReq),
@@ -161,7 +161,7 @@ create_destination(#destination{} = Destination) ->
 	MaxTtl = Header("Message-Max-Ttl", Destination#destination.max_ttl),
 	ReplyTime = Header("Message-Reply-Time", Destination#destination.reply_time),
 	
-	Dest = yarmo_destination:create(Store, Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
+	Dest = DestMod:create(Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
 
 	{201, [ {'Location', destination_url(Destination#destination.name)}, 
 			{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
@@ -173,7 +173,8 @@ with_destination(Name, FoundCallback) ->
 
 with_destination(Name, FoundCallback, NotFoundCallback) ->
 	Destination = name_to_destination(Name),
-	case yarmo_destination:find(Store, Destination) of
+	
+	case DestMod:find(Destination) of
 		not_found -> NotFoundCallback(Destination);
 		Dest      -> FoundCallback(Dest)
 	end.
@@ -230,4 +231,3 @@ expires_header(DateTime, TtlSeconds) ->
 make_etag(Term) ->
     <<SigInt:128/integer>> = erlang:md5(term_to_binary(Term)),
     "\"" ++ lists:flatten(io_lib:format("~.36B",[SigInt])) ++ "\"".
-	

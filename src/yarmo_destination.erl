@@ -1,17 +1,17 @@
--module(yarmo_destination).
+-module(yarmo_destination, [Store]).
 -author('author <alex.portnov@gmail.com>').
 
 -include("yarmo.hrl").
 
--export([find/2, create/2, generate_key/2]).
+-export([find/1, create/1, generate_key/2]).
 
-find(Store, #destination{type = Type, name = Name}) ->
+find(#destination{type = Type, name = Name}) ->
 	case Store:read(generate_key(Type, Name)) of
 		not_found -> not_found;
-		Doc -> doc2dest(Store, Doc)
+		Doc -> doc2dest(Doc)
 	end.	
 
-create(Store, #destination{type = Type, name = Name} = Destination) ->
+create(#destination{type = Type, name = Name} = Destination) ->
 	Document = [
 		{?l2b("type"), ?l2b(Type)},
 		{?l2b("name"), ?l2b(string:join(Name, "."))},
@@ -22,12 +22,12 @@ create(Store, #destination{type = Type, name = Name} = Destination) ->
 	Key = generate_key(Type, Name),
 	Store:create(Key, Document),
 	
-	doc2dest(Store, [{<<"_id">>, Key} | Document]).
+	doc2dest([{<<"_id">>, Key} | Document]).
 
 generate_key(Type, Name) ->
 	Type ++ ":" ++ string:join(Name, ".").	
 
-doc2dest(Store, Doc) ->
+doc2dest(Doc) ->
 	BinFun = fun(Value) ->
 		case Value of
 			Bin when is_binary(Bin) -> ?b2l(Bin);

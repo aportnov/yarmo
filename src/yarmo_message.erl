@@ -1,16 +1,16 @@
--module(yarmo_message).
+-module(yarmo_message, [Store]).
 -author('author <alex.portnov@gmail.com>').
 
 -include("yarmo.hrl").
 
--export([create/2, find/2, create_batch/2, find_batch/2, consume/2]).
+-export([create/1, find/1, create_batch/1, find_batch/1, consume/1]).
 
 %% For testing
 -export([headers2json/1, json2headers/1]).
 
 %% Public API
 
-create(Store, #message{} = Message) ->
+create(#message{} = Message) ->
 	Document = [
 		{?l2b("type"), ?l2b("message")},
 		{?l2b("destination"), ?l2b(Message#message.destination) },
@@ -23,15 +23,15 @@ create(Store, #message{} = Message) ->
 		generated  -> Store:create(Document);
 		Key        -> Store:create(Key, Document)
 	end,	
-	doc2message(Store, [{<<"_id">>, Id} | Document]).	
+	doc2message([{<<"_id">>, Id} | Document]).	
 	
-find(Store, MessageId) ->
+find(MessageId) ->
 	case Store:read(MessageId) of
 		not_found -> not_found;
-		Message -> doc2message(Store, Message)
+		Message -> doc2message(Message)
 	end.		
 	
-create_batch(Store, #batch{} = Batch) ->
+create_batch(#batch{} = Batch) ->
 	Document = [
 		{?l2b("type"), ?l2b("batch")},
 		{?l2b("destination"), ?l2b(Batch#batch.destination) },
@@ -39,27 +39,27 @@ create_batch(Store, #batch{} = Batch) ->
 		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	{{id, Id}, {rev, _}} = Store:create(Document),
-	doc2batch(Store, [{<<"_id">>, Id} | Document]).	
+	doc2batch([{<<"_id">>, Id} | Document]).	
 
-find_batch(Store, BatchId) ->
+find_batch(BatchId) ->
 	case Store:read(BatchId) of
 		not_found -> not_found;
-		Batch -> doc2batch(Store, Batch)
+		Batch -> doc2batch(Batch)
 	end.		
 	
-consume(Store, #destination{id = Id}) ->
+consume(#destination{id = Id}) ->
 	Key = fun(TimeStamp) -> ( [$[, $"] ++ Id ++ [$", $,, 32] ++ integer_to_list(TimeStamp) ++ [$]] ) end,	
 
 	Options = [{limit, 1}, {descending, true}, {startkey, Key(?timestamp())}, {endkey, Key(0)}],
 	
 	case Store:view("message", "undelivered", Options) of
 		[] -> not_found;
-		[Message | _] -> doc2message(Store, Message)
+		[Message | _] -> doc2message(Message)
 	end.	
 	
 %% Private API	
 	
-doc2message(Store, Doc) ->
+doc2message(Doc) ->
 	#message{
 		id                = ?b2l(Store:get_value(Doc, "_id")),
 		destination       = ?b2l(Store:get_value(Doc, "destination")),
@@ -69,7 +69,7 @@ doc2message(Store, Doc) ->
 		created_timestamp = Store:get_value(Doc, "created_timestamp")
 	}.
 
-doc2batch(Store, Doc) ->
+doc2batch(Doc) ->
 	#batch{
 		id                = ?b2l(Store:get_value(Doc, "_id")),
 		destination       = ?b2l(Store:get_value(Doc, "destination")),

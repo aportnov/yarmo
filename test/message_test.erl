@@ -5,17 +5,16 @@
 
 -include("../src/yarmo.hrl").
 
--define(TEST_MOD, yarmo_message).
-
 header_conversion_test() ->
 	Headers = [{'Host', "www.sample.com"}, {'X-Powered-By', "Erlang"}],
 	JsonHeaders = [{struct,[{name, <<"Host">>}, {value, <<"www.sample.com">>}]}, {struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}],
 	
- 	JsonHeaders = ?TEST_MOD:headers2json(Headers),
-	Headers     = ?TEST_MOD:json2headers(JsonHeaders).
+	Mod = test_mod(),
+ 	JsonHeaders = Mod:headers2json(Headers),
+	Headers     = Mod:json2headers(JsonHeaders).
 	
 create_message_test() ->
-	Store = mock_store:new([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}]),
+	Mod = test_mod([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}]),
 	
 	Message = #message{
 		destination = "topic:sample.topic",
@@ -30,10 +29,10 @@ create_message_test() ->
 		max_ttl = 300,
 		headers = []
 	
-	} = ?TEST_MOD:create(Store, Message).
+	} = Mod:create(Message).
 
 create_message_with_headers_test() ->
-	Store = mock_store:new([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}] ),
+	Mod = test_mod([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}] ),
 	
 	Message = #message{
 		destination = "topic:sample.topic",
@@ -49,10 +48,10 @@ create_message_with_headers_test() ->
 		max_ttl = 300,
 		headers = [{'X-Powered-By', "Erlang"}]
 	
-	} = ?TEST_MOD:create(Store, Message).
+	} = Mod:create(Message).
 	
 create_batch_test() ->
-	Store = mock_store:new([{create, {{id, <<"batch-id">>}, {rev, <<"rev">>}}}]),
+	Mod = test_mod([{create, {{id, <<"batch-id">>}, {rev, <<"rev">>}}}]),
 	
 	Batch = #batch{
 		destination = "topic:sample.topic",
@@ -63,5 +62,11 @@ create_batch_test() ->
 		id = "batch-id",
 		destination = "topic:sample.topic",
 		max_ttl = 300
-	} = ?TEST_MOD:create_batch(Store, Batch).	
-			
+	} = Mod:create_batch(Batch).	
+
+test_mod() ->
+	test_mod([]).
+
+test_mod(StoreOptions) ->
+	Store = mock_store:new(StoreOptions),
+	yarmo_message:new(Store).			
