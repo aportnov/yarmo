@@ -15,10 +15,12 @@ read(Key) ->
 	end.	
 
 create(Key, Document) ->
-	{json,{struct, [{<<"ok">>, true},
-	               {<<"id">>, Id},
-	               {<<"rev">>, Rev}]} } = ?DB_CREATE_ID(?DATABASE_NAME, Key, Document),
-	{{id, Id}, {rev, Rev}}.
+	case ?DB_CREATE_ID(?DATABASE_NAME, Key, Document) of
+		{json, {struct,[{<<"error">>,<<"conflict">>}| _]} }	-> {{id, ?l2b(Key)}, {rev, refetch}};
+		{json,{struct, [{<<"ok">>, true},
+		               {<<"id">>, Id},
+		               {<<"rev">>, Rev}]} } -> {{id, Id}, {rev, Rev}}
+	end.	
 
 create(Document) ->
 	{json,{struct, [{<<"ok">>, true},

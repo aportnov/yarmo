@@ -8,7 +8,11 @@
 -include("yarmo.hrl").
 
 parse_atom_request(#request{body = Body, context_root = ContextRoot}) ->
-	{ Xml, _Rest } = xmerl_scan:string(Body),
+	Feed = case Body of
+		B when is_binary(B) -> ?b2l(B);
+		B when is_list(B) -> B
+	end,
+	{ Xml, _Rest } = xmerl_scan:string(Feed),
 	
 	Fun = fun(#xmlElement{} = EntryNode, Acc) ->
 		#content{type = Type, src = Src, body = MsgBody, summary = Summary} = parse_content(EntryNode),
@@ -66,8 +70,8 @@ parse_content(#xmlElement{} = EntryNode) ->
 		[] -> Content;
 		[#xmlElement{content = ElmText, attributes = Attributes} | _] -> 
 		    Body = case ElmText of
-				[#xmlText{value = B}] -> B;
-				_ -> []
+				[#xmlText{value = B}] -> ?l2b(B);
+				_ -> <<>>
 			end,	
 			lists:foldl(Fun, Content#content{body = Body}, Attributes)		
 	end.	

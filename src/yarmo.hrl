@@ -24,4 +24,4 @@
 
 -record(link, {href, rel = ["alternate"], title, anchor, extensions = []}).
 
--record(content, {type = "text/plain", src, body = [], summary = []}).
+-record(content, {type = "text/plain", src, body = <<>>, summary = []}).
