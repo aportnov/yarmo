@@ -5,7 +5,7 @@
 
 -include("yarmo.hrl").
 
--export([read/1, create/1, create/2, get_value/2]).
+-export([read/1, create/1, create/2, get_value/2, view/3, view/2]).
 
 read(Key) ->
 	case ?DB_READ(?DATABASE_NAME, Key) of
@@ -27,6 +27,16 @@ create(Document) ->
 	               {<<"id">>, Id},
 	               {<<"rev">>, Rev}]} } = ?DB_CREATE(?DATABASE_NAME, Document),
 	{{id, Id}, {rev, Rev}}.
+
+
+view(DocName, ViewName) ->
+	view(DocName, ViewName, []).
+
+view(DocName, ViewName, Options) ->
+	{json,{struct,[{<<"total_rows">>, _Total},
+	               {<<"offset">>, _},
+	               {<<"rows">>, Results}]} } = ?DB_VIEW(?DATABASE_NAME, DocName, ViewName, Options),
+	Results.
 
 get_value(Document, Name) ->	
 	case lists:keysearch(?l2b(Name), 1, Document) of

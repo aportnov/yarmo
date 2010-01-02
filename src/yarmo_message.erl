@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/2, find/2, create_batch/2, find_batch/2]).
+-export([create/2, find/2, create_batch/2, find_batch/2, consume/2]).
 
 %% For testing
 -export([headers2json/1, json2headers/1]).
@@ -46,6 +46,16 @@ find_batch(Store, BatchId) ->
 		not_found -> not_found;
 		Batch -> doc2batch(Store, Batch)
 	end.		
+	
+consume(Store, #destination{id = Id}) ->
+	Key = fun(TimeStamp) -> ( [$[, $"] ++ Id ++ [$", $,, 32] ++ integer_to_list(TimeStamp) ++ [$]] ) end,	
+
+	Options = [{limit, 1}, {descending, true}, {startkey, Key(?timestamp())}, {endkey, Key(0)}],
+	
+	case Store:view("message", "undelivered", Options) of
+		[] -> not_found;
+		[Message | _] -> doc2message(Store, Message)
+	end.	
 	
 %% Private API	
 	

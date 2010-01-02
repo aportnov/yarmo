@@ -13,7 +13,7 @@ generate_key_test() ->
 	"topic:sample" = ?TEST_MOD:generate_key("topic", ["sample"]).
 	
 create_queue_test() ->
-	Store = mock_store:new({{read, unused}, {create, {{id, "id"}, {rev, "Rev"}}} }),
+	Store = mock_store:new([{create, {{id, "id"}, {rev, "Rev"}}}]),
 	Dest = #destination{type = "queue", name = ["sample", "queue", "example"], max_ttl = 800},
 	
 	#destination{
@@ -25,7 +25,7 @@ create_queue_test() ->
 	} = ?TEST_MOD:create(Store, Dest).
 	
 create_topic_test() ->
-	Store = mock_store:new({{read, unused}, {create, {{id, "id"}, {rev, "Rev"}}} }),
+	Store = mock_store:new([{create, {{id, "id"}, {rev, "Rev"}}}]),
 	Dest = #destination{type = "topic", name = ["sample", "topic", "example"], max_ttl = 2800, reply_time = 200},
 
 	#destination{
@@ -37,7 +37,7 @@ create_topic_test() ->
 	} = ?TEST_MOD:create(Store, Dest).
 
 find_destination_not_existing_test() ->
-	Store = mock_store:new({{read, not_found}, {create, unused} }),
+	Store = mock_store:new([{read, not_found}]),
 	
 	Dest = #destination{type = "topic", name = ["sample", "topic", "example"]},
 	
@@ -53,7 +53,7 @@ find_destination_test() ->
 		{?l2b("created_timestamp"), calendar:datetime_to_gregorian_seconds(erlang:universaltime())}
 	],
 	
-	Store = mock_store:new({{read, Document}, {create, unused}}), 	
+	Store = mock_store:new([{read, Document}]), 	
 			
 	Dest = #destination{type = "queue", name = ["sample", "queue", "example"]},
 

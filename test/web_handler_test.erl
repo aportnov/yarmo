@@ -19,9 +19,9 @@ get_existing_message_test() ->
 		{?l2b("max_ttl"), 222 },
 		{?l2b("headers"), JsonHeaders },
 		{?l2b("body"), <<"Sample Body">> },
-		{?l2b("created_timestamp"), timestamp()}
+		{?l2b("created_timestamp"), ?timestamp()}
 	],
-	Store = mock_store:new({ {read, Document}, {create, unused} }),
+	Store = mock_store:new([{read, Document}]),
 	
 	Mod = handler_mod(Request, Store),
 	{200, Headers, Body} = Mod:handle(),
@@ -31,7 +31,7 @@ get_existing_message_test() ->
 
 get_message_not_found_test() ->
 	Request = #request{context_root = "queues", method = 'GET', path = ["sample", "queue","messages", "message-id"]}, 
-	Store = mock_store:new({ {read, not_found}, {create, unused} }),
+	Store = mock_store:new([{read, not_found}]),
 	
 	Mod = handler_mod(Request, Store),
 	{404, [], _} = Mod:handle().
@@ -49,7 +49,7 @@ get_existing_queue_relationships_test() ->
 		{?l2b("type"), ?l2b("queue")},
 		{?l2b("name"), ?l2b("existing.queue")}
 	],
-	Store = mock_store:new({{read, DestDocument}, {create, unused}}),
+	Store = mock_store:new([{read, DestDocument}]),
 	Mod = handler_mod(Request, Store),
 	
 	{200, Headers, []} = Mod:handle(),
@@ -62,7 +62,7 @@ get_nonexisting_queue_relationships_test() ->
 		path = ["nonexisting", "queue"],
 		headers = [{'Host', "www.sample-host.com"}]
 	},
-	Store = mock_store:new({{read, not_found}, {create, unused}}),
+	Store = mock_store:new([{read, not_found}]),
 	Mod = handler_mod(Request, Store),
 	
 	{404, [], _} = Mod:handle().
@@ -75,7 +75,7 @@ put_create_new_destination_test() ->
 		path = ["nonexisting", "queue"],
 		headers = [{'Host', "www.sample-host.com"}, {'Message-Max-Ttl', "100"}, {'Message-Reply-Time', "40"}]
 	},
-	Store = mock_store:new({{read, not_found}, {create, {{id, "queue:nonexisting.queue"}, {rev, "rev"}}} }),
+	Store = mock_store:new([{read, not_found}, {create, {{id, "queue:nonexisting.queue"}, {rev, "rev"}}}]),
 	Mod = handler_mod(Request, Store),
 	
 	{201, Headers, []} = Mod:handle(),
@@ -94,7 +94,7 @@ put_create_existing_destination_test() ->
 		{?l2b("name"), ?l2b("existing.queue")}
 	],
 
-	Store = mock_store:new({{read, DestDocument}, {create, unused} }),
+	Store = mock_store:new([{read, DestDocument}]),
 	Mod = handler_mod(Request, Store),
 	
 	{204, [], []} = Mod:handle().
@@ -108,6 +108,3 @@ put_create_existing_destination_test() ->
 
 handler_mod(#request{} = Request, Store) ->	
 	yarmo_web_handler:new(Request, Store).
-	
-timestamp() ->
-	calendar:datetime_to_gregorian_seconds(erlang:universaltime()).	

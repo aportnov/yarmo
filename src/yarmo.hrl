@@ -11,6 +11,7 @@
 -define(DB_READ(Database, Key), couchdb:retrieve_document(Database, Key)).
 -define(DB_CREATE_ID(Database, Key, Document), couchdb:create_document(Database, {Key, Document})).
 -define(DB_CREATE(Database, Document), couchdb:create_document(Database, Document)).
+-define(DB_VIEW(Database, DocName, ViewName, Options), couchdb:invoke_view(Database, DocName, ViewName, Options)).
 
 -define(LOG(Msg, Data), io:format(Msg ++ " ~p~n", Data)).
 

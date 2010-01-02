@@ -15,7 +15,7 @@ header_conversion_test() ->
 	Headers     = ?TEST_MOD:json2headers(JsonHeaders).
 	
 create_message_test() ->
-	Store = mock_store:new({{read, unused}, {create, {{id, <<"message-id">>}, {rev, <<"rev">>}}} }),
+	Store = mock_store:new([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}]),
 	
 	Message = #message{
 		destination = "topic:sample.topic",
@@ -33,7 +33,7 @@ create_message_test() ->
 	} = ?TEST_MOD:create(Store, Message).
 
 create_message_with_headers_test() ->
-	Store = mock_store:new({{read, unused}, {create, {{id, <<"message-id">>}, {rev, <<"rev">>}}} }),
+	Store = mock_store:new([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}] ),
 	
 	Message = #message{
 		destination = "topic:sample.topic",
@@ -52,7 +52,7 @@ create_message_with_headers_test() ->
 	} = ?TEST_MOD:create(Store, Message).
 	
 create_batch_test() ->
-	Store = mock_store:new({{read, unused}, {create, {{id, <<"batch-id">>}, {rev, <<"rev">>}}} }),
+	Store = mock_store:new([{create, {{id, <<"batch-id">>}, {rev, <<"rev">>}}}]),
 	
 	Batch = #batch{
 		destination = "topic:sample.topic",

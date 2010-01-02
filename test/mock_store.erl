@@ -5,21 +5,32 @@
 
 -export([read/1, create/1, create/2, get_value/2]).
 
-read(_Key) ->
-	{{read, Result}, _} = MockStore,
-	Result.	
+read(Key) ->
+	callback(read, [Key]).
 
-create(_Key, _Document) ->
-	{_, {create, Result}} = MockStore,
-	Result.	
+create(Key, Document) ->
+	callback(create, [Key, Document]).
 
-
-create(_Document) ->
-	{_, {create, Result}} = MockStore,
-	Result.	
+create(Document) ->
+	callback(create, [Document]).
 
 get_value(Document, Name) ->	
 	case lists:keysearch(list_to_binary(Name), 1, Document) of
 		false -> [];
 		{value, {_Name, Value}} -> Value
+	end.
+
+view(DocName, ViewName) ->
+	callback(view, [DocName, ViewName]).
+
+view(DocName, ViewName, Options) ->
+	callback(view, [DocName, ViewName, Options]).
+	
+%% Helper Functions
+
+callback(Name, Args) ->
+	case proplists:lookup(Name, MockStore) of
+		none -> undefined;
+		{Name, Fun} when is_function(Fun) -> Fun(Args);
+		{Name, Value} -> Value
 	end.
