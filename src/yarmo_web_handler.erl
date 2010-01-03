@@ -1,4 +1,4 @@
--module(yarmo_web_handler, [Request, Store, MsgMod, DestMod]).
+-module(yarmo_web_handler, [Request, Store]).
 -author('author <alex.portnov@gmail.com>').
 
 -export([handle/0]).
@@ -60,7 +60,8 @@ handle_put() ->
 	
 %% Private API Implementation
 get_message(MessageId) ->
-	case MsgMod:find(MessageId) of
+	Mod = yarmo_message:new(Store),
+	case Mod:find(MessageId) of
 		not_found ->
 			{404, [], <<"Not Found.">>};
 		Message ->
@@ -113,11 +114,10 @@ get_relationships(Relationships, #destination{name = DestName}) ->
 %% Messages
 post_message(#destination{name = Name} = Destination) ->
 	MessageUrlFun = location_url(Name),
-
-	Msg = create_message(Destination, Request),
+	Msg = create_message(yarmo_message:new(Store), Destination, Request),
 	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
 
-create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = Headers, body = Body, params = Params}) ->
+create_message(MsgMod, #destination{id = DestId, max_ttl = MaxTtl}, #request{headers = Headers, body = Body, params = Params}) ->
 	Document = #message {
 		destination = DestId, 
 		max_ttl     = MaxTtl, 
@@ -130,11 +130,11 @@ create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = H
 %% Message Batches	
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
-
+	MsgMod = yarmo_message:new(Store),
 	Batch = MsgMod:create_batch(#batch{destination = Destination#destination.id, max_ttl = Destination#destination.max_ttl}),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
-		Msg = create_message(Destination, MsgReq),
+		Msg = create_message(MsgMod, Destination, MsgReq),
 		[UrlFun(message, Msg#message.id) | Acc]
 	end,	
 	Body = lists:foldr(MsgFun, [], parse_batch_body()),
@@ -161,7 +161,8 @@ create_destination(#destination{} = Destination) ->
 	MaxTtl = Header("Message-Max-Ttl", Destination#destination.max_ttl),
 	ReplyTime = Header("Message-Reply-Time", Destination#destination.reply_time),
 	
-	Dest = DestMod:create(Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
+	Mod = yarmo_destination:new(Store),
+	Dest = Mod:create(Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
 
 	{201, [ {'Location', destination_url(Destination#destination.name)}, 
 			{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
@@ -173,8 +174,9 @@ with_destination(Name, FoundCallback) ->
 
 with_destination(Name, FoundCallback, NotFoundCallback) ->
 	Destination = name_to_destination(Name),
+	Mod = yarmo_destination:new(Store),
 	
-	case DestMod:find(Destination) of
+	case Mod:find(Destination) of
 		not_found -> NotFoundCallback(Destination);
 		Dest      -> FoundCallback(Dest)
 	end.

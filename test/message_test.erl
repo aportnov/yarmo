@@ -64,6 +64,36 @@ create_batch_test() ->
 		max_ttl = 300
 	} = Mod:create_batch(Batch).	
 
+consume_queue_message_test() ->
+	Document = [
+		{<<"_id">>, <<"message-id">>},
+		{<<"_rev">>, <<"some">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"body">>, <<"Sample Message Body">>},
+		{<<"max_ttl">>, 300},
+		{<<"headers">>, [{struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}]}
+	],
+	
+	ViewFun = fun([DocName, ViewName, Options]) ->
+		?assertEqual("message", DocName),
+		?assertEqual("undelivered", ViewName),
+		[{limit, 1}, {descending, true}, {startkey, _StartKey}, {endkey, EndKey}] = Options,
+		?assertEqual("[\"queue:sample.queue\", 0]", EndKey),
+		[Document]
+	end,	
+	%% TODO test that update is being called
+	
+	Mod = test_mod([{view, ViewFun}]),
+	
+	#message{
+		id = "message-id",
+		destination = "queue:sample.queue",
+		body = "Sample Message Body",
+		max_ttl = 300,
+		headers = [{'X-Powered-By', "Erlang"}]
+	
+	} = Mod:consume(#destination{id = "queue:sample.queue"}).	
+
 test_mod() ->
 	test_mod([]).
 

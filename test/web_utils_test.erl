@@ -21,4 +21,4 @@ make_etag_test() ->
 	
 handler_mod() ->
 	Store = mock_store:new([]),
-	yarmo_web_handler:new(#request{context_root = "topics"}, Store, yarmo_message:new(Store), yarmo_destination:new(Store)).			
+	yarmo_web_handler:new(#request{context_root = "topics"}, Store).			

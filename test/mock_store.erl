@@ -3,7 +3,7 @@
 
 -behaviour(data_store).
 
--export([read/1, create/1, create/2, get_value/2]).
+-export([read/1, create/1, create/2, get_value/2, view/2, view/3]).
 
 read(Key) ->
 	callback(read, [Key]).
