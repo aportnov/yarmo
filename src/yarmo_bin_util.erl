@@ -1,7 +1,7 @@
 -module(yarmo_bin_util).
 -author('author <alex.portnov@gmail.com>').
 
--export([bin_replace/3, bin_split/2, bin_find/2]).
+-export([bin_replace/3, bin_split/2, bin_find/2, bin_to_list/1]).
 
 bin_replace(Bin, From, To) -> 
     bin_replace(Bin, erlang:byte_size(From), Bin, From, To, 0). 
@@ -69,3 +69,7 @@ bin_split(SplitBy, Binary, Acc) ->
 		not_found ->		
 			lists:reverse([Binary | Acc])
 	end.		
+
+bin_to_list(Value) when is_binary(Value) ->
+	binary_to_list(Value);
+bin_to_list(Value) -> Value.

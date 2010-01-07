@@ -20,23 +20,19 @@ create(#destination{type = Type, name = Name} = Destination) ->
 		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	Key = generate_key(Type, Name),
-	Store:create(Key, Document),
+	{{id, _}, {rev, Rev}} = Store:create(Key, Document),
 	
-	doc2dest([{<<"_id">>, Key} | Document]).
+	doc2dest([{<<"_id">>, Key}, {<<"_rev">>, Rev} | Document]).
 
 generate_key(Type, Name) ->
 	Type ++ ":" ++ string:join(Name, ".").	
 
 doc2dest(Doc) ->
-	BinFun = fun(Value) ->
-		case Value of
-			Bin when is_binary(Bin) -> ?b2l(Bin);
-			Any -> Any
-		end	
-	end,	
+	BinFun = fun yarmo_bin_util:bin_to_list/1,	
 	
 	#destination{
 		id         = BinFun(Store:get_value(Doc, "_id")),
+		rev		   = BinFun(Store:get_value(Doc, "_rev")),
 		type       = BinFun(Store:get_value(Doc, "type")),
 		name       = string:tokens(BinFun(Store:get_value(Doc, "name")), "."),
 		max_ttl    = Store:get_value(Doc, "max_ttl"),

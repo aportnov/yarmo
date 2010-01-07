@@ -29,6 +29,7 @@ create_topic_test() ->
 
 	#destination{
 		id = "topic:sample.topic.example",
+		rev = "Rev",
 		type = "topic",
 		name = ["sample", "topic", "example"],
 		max_ttl = 2800,

@@ -13,6 +13,34 @@ header_conversion_test() ->
  	JsonHeaders = Mod:headers2json(Headers),
 	Headers     = Mod:json2headers(JsonHeaders).
 	
+message_to_doc_test_() ->
+	Mod = test_mod(),
+	
+	Message = #message{
+		destination = "topic:sample.topic",
+		body = "Sample Message Body",
+		max_ttl = 300,
+		headers = [{'X-Powered-By', "Erlang"}]
+	},
+	
+	Assert = fun(Msg, ShouldFind, ShouldNotFind) ->
+		fun() ->
+			L = Mod:message2doc(Msg),
+			lists:map(fun(Name) -> N = ?l2b(Name), ?assertMatch({N, _}, proplists:lookup(N, L)) end, ShouldFind),
+			lists:map(fun(Name) -> ?assertMatch(none, proplists:lookup(?l2b(Name), L)) end, ShouldNotFind)
+		end	
+	end,	
+	
+	[
+		Assert(Message, ["destination", "body", "max_ttl", "headers"], ["created_timestamp", "_id", "_rev"]), 
+		Assert(Message#message{created_timestamp = ?timestamp()}, 
+			["destination", "body", "max_ttl", "headers", "created_timestamp"], ["_id", "_rev"]),
+		Assert(Message#message{created_timestamp = ?timestamp(), id = "75757575"}, 
+			["destination", "body", "max_ttl", "headers", "created_timestamp", "_id"], ["_rev"]),
+		Assert(Message#message{id = "75757575", rev = "444"}, 
+			["destination", "body", "max_ttl", "headers", "_id", "_rev"], ["created_timestamp"])
+	].	
+	
 create_message_test() ->
 	Mod = test_mod([{create, {{id, <<"message-id">>}, {rev, <<"rev">>}}}]),
 	
@@ -24,6 +52,7 @@ create_message_test() ->
 	
 	#message{
 		id = "message-id",
+		rev = "rev",
 		destination = "topic:sample.topic",
 		body = "Sample Message Body",
 		max_ttl = 300,
@@ -43,6 +72,7 @@ create_message_with_headers_test() ->
 	
 	#message{
 		id = "message-id",
+		rev = "rev",
 		destination = "topic:sample.topic",
 		body = "Sample Message Body",
 		max_ttl = 300,
@@ -60,6 +90,7 @@ create_batch_test() ->
 		
 	#batch{
 		id = "batch-id",
+		rev = "rev",
 		destination = "topic:sample.topic",
 		max_ttl = 300
 	} = Mod:create_batch(Batch).	
