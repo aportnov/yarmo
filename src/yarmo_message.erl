@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/1, update/1, find/1, create_batch/1, find_batch/1, consume/1]).
+-export([create/1, update/1, find/1, create_batch/1, find_batch/1, consume/1, consume/2]).
 
 %% For testing
 -export([headers2json/1, json2headers/1, message2doc/1, doc2message/1]).
@@ -54,15 +54,29 @@ find_batch(BatchId) ->
 		Batch -> doc2batch(Batch)
 	end.		
 	
-consume(#destination{id = Id}) ->
+consume(#destination{type = queue} = Destination) ->
+	Callback = fun(#message{} = Messsage) ->
+		case update(Messsage#message{consumed_timestamp = ?timestamp()}) of
+			{ok, {rev, Rev}}     -> Messsage#message{rev = Rev};
+			{conflict, refetch}  -> consume(Destination);
+			{bad_request, Error} -> {error, Error}
+		end	
+	end,
+	consume(Destination, Callback);
+			
+consume(#destination{type = topic} = Destination) ->
+	consume(Destination, fun(#message{} = M) -> M end).
+	
+consume(#destination{id = Id}, Callback) ->
 	Key = fun(TimeStamp) -> ( [$[, $"] ++ Id ++ [$", $,, 32] ++ integer_to_list(TimeStamp) ++ [$]] ) end,	
 
 	Options = [{limit, 1}, {descending, true}, {startkey, Key(?timestamp())}, {endkey, Key(0)}],
 	
 	case Store:view("message", "undelivered", Options) of
 		[] -> not_found;
-		[Message | _] -> doc2message(Message)
+		[Message | _] -> Callback(doc2message(Message))
 	end.	
+
 	
 %% Private API	
 	

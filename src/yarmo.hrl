@@ -14,7 +14,7 @@
 
 -record(destination, {type = queue, id, rev, name, max_ttl = 1800, reply_time = 60}).
 
--record(message, {destination, id = generated, rev, max_ttl, headers = [], body, created_timestamp}).
+-record(message, {destination, id = generated, rev, max_ttl, headers = [], body, created_timestamp, consumed_timestamp}).
 
 -record(batch, {destination, id, rev, max_ttl, created_timestamp}).
 

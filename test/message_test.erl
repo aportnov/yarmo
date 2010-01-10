@@ -105,15 +105,26 @@ create_batch_test() ->
 		max_ttl = 300
 	} = Mod:create_batch(Batch).	
 
-consume_queue_message_test() ->
+consume_message_test_() ->
 	Document = [
 		{<<"_id">>, <<"message-id">>},
 		{<<"_rev">>, <<"some">>},
 		{<<"destination">>, <<"queue:sample.queue">>},
 		{<<"body">>, <<"Sample Message Body">>},
 		{<<"max_ttl">>, 300},
+		{<<"created_timestamp">>, 77777},
 		{<<"headers">>, [{struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}]}
 	],
+	
+	Message = #message{
+		id = "message-id",
+		rev = "some",
+		destination = "queue:sample.queue",
+		body = "Sample Message Body",
+		max_ttl = 300,
+		headers = [{'X-Powered-By', "Erlang"}],
+		created_timestamp = 77777
+	},
 	
 	ViewFun = fun([DocName, ViewName, Options]) ->
 		?assertEqual("message", DocName),
@@ -122,18 +133,51 @@ consume_queue_message_test() ->
 		?assertEqual("[\"queue:sample.queue\", 0]", EndKey),
 		[Document]
 	end,	
-	%% TODO test that update is being called
 	
-	Mod = test_mod([{view, ViewFun}]),
+	Assert = fun(Expected, StoreMock, DestType) ->
+		Mod = test_mod(StoreMock),
+		fun() -> ?assertEqual(Expected, Mod:consume(#destination{id = "queue:sample.queue", type = DestType})) end
+	end,
+	[
+		Assert(Message, [{view, ViewFun}], topic),
+		Assert(Message#message{rev = "newRev"}, [{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, <<"newRev">>}}}], queue),
+		Assert({error, bad_rev}, [{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}} }}], queue)
+	].		
+
+consume_retry_test() ->
+	Document = [
+		{<<"_id">>, <<"message-id">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"body">>, <<"Sample Message Body">>},
+		{<<"max_ttl">>, 300},
+		{<<"created_timestamp">>, 77777},
+		{<<"headers">>, [{struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}]}
+	],	
 	
+	ViewFun = fun([_DocName, _ViewName, _Options]) ->
+		Rev = case erlang:get(rev) of undefined -> 1; Any -> Any end,
+		erlang:put(rev, Rev + 1),
+		[ [{<<"_rev">>, ?l2b(integer_to_list(Rev))} | Document] ]
+	end,
+	
+	UpdateFun = fun([Key, OldRev, _Document]) ->
+		case OldRev of
+			"1" -> {{id, ?l2b(Key)}, {rev, refetch}};
+			"2" -> {{id, ?l2b(Key)}, {rev, <<"3">>}}
+		end
+	end,	
+	
+	Mod = test_mod([{view, ViewFun}, {update, UpdateFun}]),		
 	#message{
 		id = "message-id",
+		rev = "3",
 		destination = "queue:sample.queue",
 		body = "Sample Message Body",
 		max_ttl = 300,
-		headers = [{'X-Powered-By', "Erlang"}]
-	
-	} = Mod:consume(#destination{id = "queue:sample.queue"}).	
+		headers = [{'X-Powered-By', "Erlang"}],
+		created_timestamp = 77777
+	} = Mod:consume(#destination{id = "queue:sample.queue", type = queue}).
+		
 
 test_mod() ->
 	test_mod([]).
