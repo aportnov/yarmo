@@ -3,7 +3,7 @@
 
 -behaviour(data_store).
 
--export([read/1, create/1, create/2, get_value/2, view/2, view/3]).
+-export([read/1, create/1, create/2, get_value/2, view/2, view/3, update/3]).
 
 read(Key) ->
 	callback(read, [Key]).
@@ -25,6 +25,9 @@ view(DocName, ViewName) ->
 
 view(DocName, ViewName, Options) ->
 	callback(view, [DocName, ViewName, Options]).
+	
+update(Key, OldRev, Document) ->
+	callback(update, [Key, OldRev, Document]).	
 	
 %% Helper Functions
 

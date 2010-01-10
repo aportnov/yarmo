@@ -24,10 +24,12 @@ create(#message{} = Message) ->
 
 update(#message{id = Id, rev = OldRev} = Message) ->
 	Document = message2doc(Message#message{id = undefined, rev = undefined}),
-	{{id, Id}, {rev, Rev}} = Store:update(Id, OldRev, Document),
+	BinId = ?l2b(Id),
+	{{id, BinId}, {rev, Rev}} = Store:update(Id, OldRev, Document),
 	case Rev of 
+		{bad_request, Error} -> {bad_request, Error};
 		refetch -> {conflict, refetch};
-		_       -> {ok, {rev, Rev}}
+		_       -> {ok, {rev, ?b2l(Rev)}}
 	end.	
 	
 find(MessageId) ->

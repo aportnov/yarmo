@@ -37,6 +37,7 @@ create(Document) ->
 update(Key, OldRev, Document) ->
 	case ?DB_REPLACE(Key, OldRev, Document) of
 		{json, {struct, [{<<"error">>,<<"conflict">>} | _]} } -> {{id, ?l2b(Key)}, {rev, refetch}};
+		{json, {struct, [{<<"error">>, Error} | _]} } -> {{id, ?l2b(Key)}, {rev, {bad_request, ?b2a(Error)} }};
 		{json, {struct, [{<<"ok">>,true},
 	               	     {<<"id">>, Id},
 	               	     {<<"rev">>, Rev}]}} -> {{id, Id}, {rev, Rev}}

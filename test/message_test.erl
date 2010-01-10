@@ -79,14 +79,24 @@ create_message_with_headers_test() ->
 		headers = [{'X-Powered-By', "Erlang"}]
 	
 	} = Mod:create(Message).
+
+update_message_test_() ->
+	Message = #message{id = "message-id", rev = "Rev", destination = "topic:sample.topic"},
+	
+	Assert = fun(Expected, UpdateOption) ->
+		Mod = test_mod([{update, UpdateOption}]),
+		fun() -> ?assertEqual(Expected, Mod:update(Message)) end
+	end,			
+	[
+		Assert({ok, {rev, "NewRev"}}, {{id, <<"message-id">>}, {rev, <<"NewRev">>}}),
+		Assert({conflict, refetch}, {{id, <<"message-id">>}, {rev, refetch}}),
+		Assert({bad_request, format_error}, {{id, <<"message-id">>}, {rev, {bad_request, format_error}}})
+	].	 	
 	
 create_batch_test() ->
 	Mod = test_mod([{create, {{id, <<"batch-id">>}, {rev, <<"rev">>}}}]),
 	
-	Batch = #batch{
-		destination = "topic:sample.topic",
-		max_ttl = 300
-	},
+	Batch = #batch{destination = "topic:sample.topic", max_ttl = 300},
 		
 	#batch{
 		id = "batch-id",
