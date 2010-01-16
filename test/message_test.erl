@@ -136,7 +136,7 @@ consume_message_test_() ->
 	
 	Assert = fun(Expected, StoreMock, DestType) ->
 		Mod = test_mod(StoreMock),
-		fun() -> ?assertEqual(Expected, Mod:consume(#destination{id = "queue:sample.queue", type = DestType})) end
+		fun() -> ?assertEqual(Expected, Mod:consume(#destination{id = "queue:sample.queue", type = atom_to_list(DestType)})) end
 	end,
 	[
 		Assert(Message, [{view, ViewFun}], topic),
@@ -176,7 +176,7 @@ consume_retry_test() ->
 		max_ttl = 300,
 		headers = [{'X-Powered-By', "Erlang"}],
 		created_timestamp = 77777
-	} = Mod:consume(#destination{id = "queue:sample.queue", type = queue}).
+	} = Mod:consume(#destination{id = "queue:sample.queue", type = "queue"}).
 		
 
 test_mod() ->

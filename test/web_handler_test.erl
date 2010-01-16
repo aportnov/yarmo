@@ -73,13 +73,13 @@ put_create_new_destination_test() ->
 		context_root = "queues", 
 		method = 'PUT', 
 		path = ["nonexisting", "queue"],
-		headers = [{'Host', "www.sample-host.com"}, {'Message-Max-Ttl', "100"}, {'Message-Reply-Time', "40"}]
+		headers = [{'Host', "www.sample-host.com"}, {'Message-Max-Ttl', "100"}, {'Message-Reply-Time', "40"}, {'Message-Ack-Mode',"single"}]
 	},
 	Store = mock_store:new([{read, not_found}, {create, {{id, "queue:nonexisting.queue"}, {rev, "rev"}}}]),
 	Mod = handler_mod(Request, Store),
 	
 	{201, Headers, []} = Mod:handle(),
-	[{'Location', _Loc}, {'Message-MAX-TTL', "100"}, {'Message-Reply-Time', "40"}] = Headers.
+	[{'Location', _Loc}, {'Message-Ack-Mode',"single"}, {'Message-MAX-TTL', "100"}, {'Message-Reply-Time', "40"}] = Headers.
 
 put_create_existing_destination_test() ->
 	Request = #request{
@@ -100,7 +100,33 @@ put_create_existing_destination_test() ->
 	{204, [], []} = Mod:handle().
 
 %% POST Create Message
+post_create_message_test_() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "incoming"], params = [], headers = []},
+	
+	ReadDestFun = fun(["queue:existing.queue"]) ->
+		[
+			{?l2b("_id"),  ?l2b("queue:existing.queue")},
+			{?l2b("type"), ?l2b("queue")},
+			{?l2b("name"), ?l2b("existing.queue")}
+		]
+	end,	
+	
+	Assert = fun(CreateFun, Req, MsgId) ->
+		fun() ->
+			Store = mock_store:new([{read, ReadDestFun},{create, CreateFun}]),
+			Mod = handler_mod(Req, Store),
+			{201, Headers, []} = Mod:handle(),
+			[{'Location', "/queues/existing/queue/messages/" ++ MsgId}] = Headers			
+		end	
+	end,			
+	
+	[
+		Assert(fun([_Doc]) -> {{id, <<"message-id">>}, {rev, <<"Rev">>}} end, Request, "message-id"),
+		Assert(fun(["m-id", _Doc]) -> {{id, <<"m-id">>}, {rev, <<"Rev">>}} end, Request#request{params = [{"message_id", "m-id"}]}, "m-id")
+	].
 
+%% POST Consume Message (Queue)
 
 %% POST Create Message Batch				
 	

@@ -54,7 +54,7 @@ find_batch(BatchId) ->
 		Batch -> doc2batch(Batch)
 	end.		
 	
-consume(#destination{type = queue} = Destination) ->
+consume(#destination{type = "queue"} = Destination) ->
 	Callback = fun(#message{} = Messsage) ->
 		case update(Messsage#message{consumed_timestamp = ?timestamp()}) of
 			{ok, {rev, Rev}}     -> Messsage#message{rev = Rev};
@@ -64,7 +64,7 @@ consume(#destination{type = queue} = Destination) ->
 	end,
 	consume(Destination, Callback);
 			
-consume(#destination{type = topic} = Destination) ->
+consume(#destination{type = "topic"} = Destination) ->
 	consume(Destination, fun(#message{} = M) -> M end).
 	
 consume(#destination{id = Id}, Callback) ->

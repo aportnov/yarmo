@@ -42,6 +42,8 @@ handle_post() ->
 			with_destination(lists:reverse(Destination), fun post_message/1);
 		["batches", "incomming" | Destination] ->
 			with_destination(lists:reverse(Destination), fun post_batch/1);
+		["poller" | Destination] ->
+			with_destination(lists:reverse(Destination), fun consume_message/1);		
 		_ -> {405, [], <<"Method Not Allowed.">>}
 	end.
 	
@@ -127,6 +129,15 @@ create_message(MsgMod, #destination{id = DestId, max_ttl = MaxTtl}, #request{hea
 	}, 
 	MsgMod:create(Document).
 
+consume_message(#destination{name = Name, type = "queue"} = Destination) ->
+	MessageUrlFun = location_url(Name),
+	case yarmo_message:consume(Destination) of
+	  {error, Error} -> {400, [], yarmo_bin_util:thing_to_bin(Error)};
+	  Message ->
+		%% Should ack message here
+		{200, [{'Content-Location', MessageUrlFun(message, Message#message.id)} | Message#message.headers], Message#message.body}	
+	end.	
+
 %% Message Batches	
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
@@ -154,17 +165,23 @@ parse_batch_body() ->
 %% Destinations	
 create_destination(#destination{} = Destination) ->
 	Header = fun(Name, Default) -> 
-		Value = integer_to_list(Default),
-		list_to_integer(get_option(Name, Value, Request#request.headers)) 
+		case Default of
+			D when is_integer(D) ->
+				list_to_integer(get_option(Name, integer_to_list(D), Request#request.headers));
+			L ->
+				get_option(Name, L, Request#request.headers)
+		end	
 	end,
 	
 	MaxTtl = Header("Message-Max-Ttl", Destination#destination.max_ttl),
 	ReplyTime = Header("Message-Reply-Time", Destination#destination.reply_time),
+	AckMode = Header("Message-Ack-Mode", Destination#destination.ack_mode),
 	
 	Mod = yarmo_destination:new(Store),
-	Dest = Mod:create(Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime}),
+	Dest = Mod:create(Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime, ack_mode = AckMode}),
 
 	{201, [ {'Location', destination_url(Destination#destination.name)}, 
+			{'Message-Ack-Mode', Dest#destination.ack_mode},
 			{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
 			{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []}.
 
@@ -231,5 +248,4 @@ expires_header(DateTime, TtlSeconds) ->
 	httpd_util:rfc1123_date(ExpireDatetime).
 
 make_etag(Term) ->
-    <<SigInt:128/integer>> = erlang:md5(term_to_binary(Term)),
-    "\"" ++ lists:flatten(io_lib:format("~.36B",[SigInt])) ++ "\"".
+	"\"" ++ yarmo_bin_util:md5(Term, 36)  ++ "\"".

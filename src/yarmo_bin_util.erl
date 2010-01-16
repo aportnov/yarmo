@@ -1,7 +1,7 @@
 -module(yarmo_bin_util).
 -author('author <alex.portnov@gmail.com>').
 
--export([bin_replace/3, bin_split/2, bin_find/2, bin_to_list/1]).
+-export([bin_replace/3, bin_split/2, bin_find/2, bin_to_list/1, thing_to_bin/1, md5/2]).
 
 bin_replace(Bin, From, To) -> 
     bin_replace(Bin, erlang:byte_size(From), Bin, From, To, 0). 
@@ -73,3 +73,17 @@ bin_split(SplitBy, Binary, Acc) ->
 bin_to_list(Value) when is_binary(Value) ->
 	binary_to_list(Value);
 bin_to_list(Value) -> Value.
+
+thing_to_bin(Value) when is_atom(Value) ->
+	atom_to_binary(Value, utf8);
+thing_to_bin(Value) when is_list(Value) ->
+	list_to_binary(Value);
+thing_to_bin(Value) when is_binary(Value) ->
+	Value;
+thing_to_bin(Value) ->
+	term_to_binary(Value).
+
+md5(Term, Base) ->
+    <<SigInt:128/integer>> = erlang:md5(term_to_binary(Term)),
+	Format = "~." ++ integer_to_list(Base) ++ "B",
+    lists:flatten(io_lib:format(Format,[SigInt])).	

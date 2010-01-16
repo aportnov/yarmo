@@ -12,7 +12,7 @@
 
 -record(request, {context_root = queues, method = 'GET', path = [], params, headers, cookies, body, peer}).
 
--record(destination, {type = queue, id, rev, name, max_ttl = 1800, reply_time = 60}).
+-record(destination, {type = "queue", id, rev, name, max_ttl = 1800, reply_time = 60, ack_mode = "auto"}).
 
 -record(message, {destination, id = generated, rev, max_ttl, headers = [], body, created_timestamp, consumed_timestamp}).
 

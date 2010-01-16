@@ -13,14 +13,15 @@ generate_key_test() ->
 	
 create_queue_test() ->
 	Mod = test_mod([{create, {{id, "id"}, {rev, "Rev"}}}]),
-	Dest = #destination{type = "queue", name = ["sample", "queue", "example"], max_ttl = 800},
+	Dest = #destination{type = "queue", name = ["sample", "queue", "example"], max_ttl = 800, ack_mode = "single"},
 	
 	#destination{
 		id = "queue:sample.queue.example",
 		type = "queue",
 		name = ["sample","queue", "example"],
 		max_ttl = 800,
-		reply_time = 60
+		reply_time = 60,
+		ack_mode = "single"
 	} = Mod:create(Dest).
 	
 create_topic_test() ->
@@ -33,7 +34,8 @@ create_topic_test() ->
 		type = "topic",
 		name = ["sample", "topic", "example"],
 		max_ttl = 2800,
-		reply_time = 200
+		reply_time = 200,
+		ack_mode = "auto"
 	} = Mod:create(Dest).
 
 find_destination_not_existing_test() ->

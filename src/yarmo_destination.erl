@@ -17,6 +17,7 @@ create(#destination{type = Type, name = Name} = Destination) ->
 		{?l2b("name"), ?l2b(string:join(Name, "."))},
 		{?l2b("max_ttl"), Destination#destination.max_ttl},
 		{?l2b("reply_time"), Destination#destination.reply_time},
+		{?l2b("ack_mode"), Destination#destination.ack_mode},
 		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	Key = generate_key(Type, Name),
@@ -36,5 +37,6 @@ doc2dest(Doc) ->
 		type       = BinFun(Store:get_value(Doc, "type")),
 		name       = string:tokens(BinFun(Store:get_value(Doc, "name")), "."),
 		max_ttl    = Store:get_value(Doc, "max_ttl"),
-		reply_time = Store:get_value(Doc, "reply_time")
+		reply_time = Store:get_value(Doc, "reply_time"),
+		ack_mode   = BinFun(Store:get_value(Doc, "ack_mode"))
 	}.	
