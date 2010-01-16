@@ -44,12 +44,7 @@ get_existing_queue_relationships_test() ->
 		path = ["existing", "queue"],
 		headers = [{'Host', "www.sample-host.com"}]
 	},
-	DestDocument = [
-		{?l2b("_id"),  ?l2b("queue:existing.queue")},
-		{?l2b("type"), ?l2b("queue")},
-		{?l2b("name"), ?l2b("existing.queue")}
-	],
-	Store = mock_store:new([{read, DestDocument}]),
+	Store = mock_store:new([{read, mock_dest()}]),
 	Mod = handler_mod(Request, Store),
 	
 	{200, Headers, []} = Mod:handle(),
@@ -88,13 +83,8 @@ put_create_existing_destination_test() ->
 		path = ["existing", "queue"],
 		headers = [{'Host', "www.sample-host.com"}, {'Message-Max-Ttl', "100"}, {'Message-Reply-Time', "40"}]
 	},
-	DestDocument = [
-		{?l2b("_id"),  ?l2b("queue:existing.queue")},
-		{?l2b("type"), ?l2b("queue")},
-		{?l2b("name"), ?l2b("existing.queue")}
-	],
 
-	Store = mock_store:new([{read, DestDocument}]),
+	Store = mock_store:new([{read, mock_dest()}]),
 	Mod = handler_mod(Request, Store),
 	
 	{204, [], []} = Mod:handle().
@@ -104,17 +94,9 @@ post_create_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "incoming"], params = [], headers = []},
 	
-	ReadDestFun = fun(["queue:existing.queue"]) ->
-		[
-			{?l2b("_id"),  ?l2b("queue:existing.queue")},
-			{?l2b("type"), ?l2b("queue")},
-			{?l2b("name"), ?l2b("existing.queue")}
-		]
-	end,	
-	
 	Assert = fun(CreateFun, Req, MsgId) ->
 		fun() ->
-			Store = mock_store:new([{read, ReadDestFun},{create, CreateFun}]),
+			Store = mock_store:new([{read, mock_dest()},{create, CreateFun}]),
 			Mod = handler_mod(Req, Store),
 			{201, Headers, []} = Mod:handle(),
 			[{'Location', "/queues/existing/queue/messages/" ++ MsgId}] = Headers			
@@ -128,9 +110,70 @@ post_create_message_test_() ->
 
 %% POST Consume Message (Queue)
 
+post_consume_message_from_queue_test() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "poller"], params = [], headers = []},
+		
+	ViewFun = fun(["message", "undelivered", _]) ->
+		Msg = [
+			{?l2b("_id"), ?l2b("message-id")},
+			{?l2b("_rev"), ?l2b("oldRev")},
+			{?l2b("type"), ?l2b("message")},
+			{?l2b("destination"), ?l2b("queue:destination") },
+			{?l2b("max_ttl"), 222 },
+			{?l2b("body"), <<"Sample Body">> },
+			{?l2b("created_timestamp"), ?timestamp()}
+		],
+		[Msg]
+	end,
+	
+	UpdateFun = fun(["message-id", "oldRev", _]) -> {{id, <<"message-id">>}, {rev, <<"newRev">>}} end,
+
+	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update, UpdateFun}]),
+	Mod = handler_mod(Request, Store),
+	{200, Headers, "Sample Body" } = Mod:handle(),
+    [{'Content-Location', "/queues/existing/queue/messages/message-id"}] = Headers. 					
+
+post_consume_empty_queue_test() ->	
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "poller"], params = [], headers = []},
+		
+	Store = mock_store:new([{read, mock_dest()},{view, []}]),
+	Mod = handler_mod(Request, Store),
+	{503, [{'Retry-After', "5"}], <<"Service Unavailable">>} = Mod:handle().
+
+post_consume_bad_rev_test() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "poller"], params = [], headers = []},
+
+	ViewFun = fun(["message", "undelivered", _]) ->
+		Msg = [
+			{?l2b("_id"), ?l2b("message-id")},
+			{?l2b("_rev"), ?l2b("oldRev")},
+			{?l2b("type"), ?l2b("message")},
+			{?l2b("destination"), ?l2b("queue:destination") },
+			{?l2b("max_ttl"), 222 },
+			{?l2b("body"), <<"Sample Body">> },
+			{?l2b("created_timestamp"), ?timestamp()}
+		],
+		[Msg]
+	end,		
+	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update,  {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}]),
+	Mod = handler_mod(Request, Store),
+	{400, [], <<"bad_rev">>} = Mod:handle().	
+
 %% POST Create Message Batch				
 	
 %% Helper Functions
+
+mock_dest() ->
+	fun(["queue:existing.queue"]) ->
+		[
+			{?l2b("_id"),  ?l2b("queue:existing.queue")},
+			{?l2b("type"), ?l2b("queue")},
+			{?l2b("name"), ?l2b("existing.queue")}
+		]
+	end.		
 
 handler_mod(#request{} = Request, Store) ->	
 	yarmo_web_handler:new(Request, Store).

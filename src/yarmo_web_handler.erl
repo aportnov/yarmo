@@ -131,7 +131,10 @@ create_message(MsgMod, #destination{id = DestId, max_ttl = MaxTtl}, #request{hea
 
 consume_message(#destination{name = Name, type = "queue"} = Destination) ->
 	MessageUrlFun = location_url(Name),
-	case yarmo_message:consume(Destination) of
+	
+    MsgMod = yarmo_message:new(Store),
+	case MsgMod:consume(Destination) of
+	  not_found      -> {503, [{'Retry-After', "5"}], <<"Service Unavailable">>};	
 	  {error, Error} -> {400, [], yarmo_bin_util:thing_to_bin(Error)};
 	  Message ->
 		%% Should ack message here
