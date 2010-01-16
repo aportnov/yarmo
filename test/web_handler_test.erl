@@ -158,7 +158,7 @@ post_consume_bad_rev_test() ->
 		],
 		[Msg]
 	end,		
-	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update,  {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}]),
+	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}]),
 	Mod = handler_mod(Request, Store),
 	{400, [], <<"bad_rev">>} = Mod:handle().	
 
@@ -173,7 +173,7 @@ mock_dest() ->
 			{?l2b("type"), ?l2b("queue")},
 			{?l2b("name"), ?l2b("existing.queue")}
 		]
-	end.		
+	end.			
 
 handler_mod(#request{} = Request, Store) ->	
 	yarmo_web_handler:new(Request, Store).

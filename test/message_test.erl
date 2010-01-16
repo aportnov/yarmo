@@ -177,6 +177,30 @@ consume_retry_test() ->
 		headers = [{'X-Powered-By', "Erlang"}],
 		created_timestamp = 77777
 	} = Mod:consume(#destination{id = "queue:sample.queue", type = "queue"}).
+
+acknowledge_message_test_() ->
+	Document = [
+		{<<"_id">>, <<"message-id">>},
+		{<<"_rev">>, <<"some">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"body">>, <<"Sample Message Body">>},
+		{<<"max_ttl">>, 300},
+		{<<"created_timestamp">>, 77777},
+		{<<"headers">>, [{struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}]}
+	],	
+	
+	Assert = fun(Expected, StoreMock) ->
+		Mod = test_mod(StoreMock),
+		fun() -> ?assertEqual(Expected, Mod:acknowledge(#message{id = "message-id"})) end
+	end,	
+	[
+		Assert(not_found, [{read, not_found}]),
+		Assert({not_consumed, "some"}, [{read, [{<<"consumed_timestamp">>, <<>>} | Document]}]),
+		Assert({acknowledged, "newRev"}, [{read, [{<<"consumed_timestamp">>, 11222} | Document]},
+		 		{update, {{id, <<"message-id">>}, {rev, <<"newRev">>}}}]),
+		Assert({error, bad_request}, [{read, [{<<"consumed_timestamp">>, 11222} | Document]},
+		 		{update, {{id, <<"message-id">>}, {rev, {bad_request, bad_request}}}}])
+	].
 		
 
 test_mod() ->

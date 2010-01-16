@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/1, update/1, find/1, create_batch/1, find_batch/1, consume/1, consume/2]).
+-export([create/1, update/1, find/1, create_batch/1, find_batch/1, consume/1, consume/2, acknowledge/1]).
 
 %% For testing
 -export([headers2json/1, json2headers/1, message2doc/1, doc2message/1]).
@@ -77,19 +77,41 @@ consume(#destination{id = Id}, Callback) ->
 		[Message | _] -> Callback(doc2message(Message))
 	end.	
 
+acknowledge(#message{id = Id}) ->
+	case find(Id) of
+		not_found -> not_found;
+		#message{consumed_timestamp = undefined, rev = Rev} -> {not_consumed, Rev};
+		#message{acknowledged_timestamp = undefined} = Msg ->
+			case update(Msg#message{acknowledged_timestamp = ?timestamp()}) of
+				{ok, {rev, Rev}}     -> {acknowledged, Rev};
+				{conflict, refetch}  -> acknowledge(Msg);
+				{bad_request, Error} -> {error, Error}
+		    end; 
+		#message{acknowledged_timestamp = T, rev = Rev} -> {acknowledged, Rev}
+	end.	
 	
 %% Private API	
 	
 doc2message(Doc) ->
 	BinFun = fun yarmo_bin_util:bin_to_list/1,	
+	
+	Filter = fun(Value) ->
+		case Value of 
+			[] -> undefined; 
+			Any -> Any
+		end
+	end,		
+		
 	#message{
-		id                = BinFun(Store:get_value(Doc, "_id")),
-		rev		          = BinFun(Store:get_value(Doc, "_rev")),		
-		destination       = BinFun(Store:get_value(Doc, "destination")),
-		body              = BinFun(Store:get_value(Doc, "body")),
-		max_ttl           = Store:get_value(Doc, "max_ttl"),
-		headers           = json2headers(Store:get_value(Doc, "headers")),
-		created_timestamp = Store:get_value(Doc, "created_timestamp")
+		id                     = BinFun(Store:get_value(Doc, "_id")),
+		rev		               = BinFun(Store:get_value(Doc, "_rev")),		
+		destination            = BinFun(Store:get_value(Doc, "destination")),
+		body                   = BinFun(Store:get_value(Doc, "body")),
+		max_ttl                = Store:get_value(Doc, "max_ttl"),
+		headers            	   = json2headers(Store:get_value(Doc, "headers")),
+		created_timestamp      = Store:get_value(Doc, "created_timestamp"),
+		consumed_timestamp     = Filter(BinFun(Store:get_value(Doc, "consumed_timestamp"))),
+		acknowledged_timestamp = Filter(BinFun(Store:get_value(Doc, "acknowledged_timestamp")))
 	}.
 	
 message2doc(#message{} = Message) ->
@@ -100,6 +122,8 @@ message2doc(#message{} = Message) ->
 		{?l2b("headers"), headers2json(filter_entity_headers(Message#message.headers)) },
 		{?l2b("body"), Message#message.body },
 		{?l2b("created_timestamp"), Message#message.created_timestamp},
+		{?l2b("consumed_timestamp"), Message#message.consumed_timestamp},
+		{?l2b("acknowledged_timestamp"), Message#message.acknowledged_timestamp},
 		{?l2b("_rev"), Message#message.rev},
 		{?l2b("_id"), Message#message.id}
 	],
