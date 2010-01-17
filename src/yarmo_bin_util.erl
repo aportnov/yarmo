@@ -74,6 +74,7 @@ bin_to_list(Value) when is_binary(Value) ->
 	binary_to_list(Value);
 bin_to_list(Value) -> Value.
 
+thing_to_bin(undefined) -> undefined;
 thing_to_bin(Value) when is_atom(Value) ->
 	atom_to_binary(Value, utf8);
 thing_to_bin(Value) when is_list(Value) ->

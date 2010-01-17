@@ -142,6 +142,7 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 		
 	  #message{id = MsgId, consumed_timestamp = Timestamp} = Message ->		
 		Headers = [{'Content-Location', MessageUrlFun(message, MsgId)} | Message#message.headers],
+		
 		case AckMode of
 			"single" ->
 				ETag = yarmo_bin_util:md5({consumed_timestamp, Timestamp}, 36),

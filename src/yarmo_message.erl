@@ -115,12 +115,14 @@ doc2message(Doc) ->
 	}.
 	
 message2doc(#message{} = Message) ->
+	
+	
 	Properties = [
 		{?l2b("type"), ?l2b("message")},
 		{?l2b("destination"), ?l2b(Message#message.destination) },
 		{?l2b("max_ttl"), Message#message.max_ttl },
 		{?l2b("headers"), headers2json(filter_entity_headers(Message#message.headers)) },
-		{?l2b("body"), Message#message.body },
+		{?l2b("body"), yarmo_bin_util:thing_to_bin(Message#message.body) },
 		{?l2b("created_timestamp"), Message#message.created_timestamp},
 		{?l2b("consumed_timestamp"), Message#message.consumed_timestamp},
 		{?l2b("acknowledged_timestamp"), Message#message.acknowledged_timestamp},
