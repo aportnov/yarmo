@@ -110,7 +110,7 @@ post_create_message_test_() ->
 
 %% POST Consume Message (Queue)
 
-post_consume_message_from_queue_test() ->
+post_consume_message_from_queue_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "poller"], params = [], headers = []},
 		
@@ -128,11 +128,23 @@ post_consume_message_from_queue_test() ->
 	end,
 	
 	UpdateFun = fun(["message-id", "oldRev", _]) -> {{id, <<"message-id">>}, {rev, <<"newRev">>}} end,
-
-	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update, UpdateFun}]),
-	Mod = handler_mod(Request, Store),
-	{200, Headers, "Sample Body" } = Mod:handle(),
-    [{'Content-Location', "/queues/existing/queue/messages/message-id"}] = Headers. 					
+	
+	Assert = fun(AckMode, HeaderCheck) ->
+		Store = mock_store:new([{read, mock_dest(AckMode)}, {view, ViewFun}, {update, UpdateFun}]),
+		Mod = handler_mod(Request, Store),
+		fun() -> {200, Headers, "Sample Body" } = Mod:handle(), HeaderCheck(Headers) end
+	end,		
+	
+    [
+		Assert("auto", fun(H) -> 
+			[{'Content-Location', "/queues/existing/queue/messages/message-id"}] = H 
+		end),
+		Assert("single", fun(H) -> 
+			[{'Link', Link}, {'Content-Location', _}] = H,
+			["/queues/existing/queue/messages/message-id/acknowledgement", Tag, "rel=\"acknowledgement\""] = string:tokens(Link, "<>; "),
+			["etag", _T] = string:tokens(Tag, "=")
+		end)	
+    ].					
 
 post_consume_empty_queue_test() ->	
 	Request = #request{context_root = "queues", method = 'POST', 
@@ -167,13 +179,18 @@ post_consume_bad_rev_test() ->
 %% Helper Functions
 
 mock_dest() ->
+	mock_dest("auto").
+	
+mock_dest(AckMode) ->
 	fun(["queue:existing.queue"]) ->
 		[
 			{?l2b("_id"),  ?l2b("queue:existing.queue")},
 			{?l2b("type"), ?l2b("queue")},
+			{?l2b("ack_mode"), ?l2b(AckMode)},
 			{?l2b("name"), ?l2b("existing.queue")}
 		]
-	end.			
+	end.
+					
 
 handler_mod(#request{} = Request, Store) ->	
 	yarmo_web_handler:new(Request, Store).

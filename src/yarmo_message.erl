@@ -87,7 +87,7 @@ acknowledge(#message{id = Id}) ->
 				{conflict, refetch}  -> acknowledge(Msg);
 				{bad_request, Error} -> {error, Error}
 		    end; 
-		#message{acknowledged_timestamp = T, rev = Rev} -> {acknowledged, Rev}
+		#message{rev = Rev} -> {acknowledged, Rev}
 	end.	
 	
 %% Private API	

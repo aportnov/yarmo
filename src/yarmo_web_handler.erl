@@ -129,16 +129,29 @@ create_message(MsgMod, #destination{id = DestId, max_ttl = MaxTtl}, #request{hea
 	}, 
 	MsgMod:create(Document).
 
-consume_message(#destination{name = Name, type = "queue"} = Destination) ->
+consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = Destination) ->
 	MessageUrlFun = location_url(Name),
 	
     MsgMod = yarmo_message:new(Store),
 	case MsgMod:consume(Destination) of
-	  not_found      -> {503, [{'Retry-After', "5"}], <<"Service Unavailable">>};	
-	  {error, Error} -> {400, [], yarmo_bin_util:thing_to_bin(Error)};
-	  Message ->
-		%% Should ack message here
-		{200, [{'Content-Location', MessageUrlFun(message, Message#message.id)} | Message#message.headers], Message#message.body}	
+	  not_found -> 
+		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};
+			
+	  {error, Error} -> 
+		{400, [], yarmo_bin_util:thing_to_bin(Error)};		
+		
+	  #message{id = MsgId, consumed_timestamp = Timestamp} = Message ->		
+		Headers = [{'Content-Location', MessageUrlFun(message, MsgId)} | Message#message.headers],
+		case AckMode of
+			"single" ->
+				ETag = yarmo_bin_util:md5({consumed_timestamp, Timestamp}, 36),
+				AckUrl = full_destination_url("http", Name, string:join(["messages", MsgId, "acknowledgement;etag=" ++ ETag], "/")),
+				AckLink = yarmo_link_util:link_header([#link{href = AckUrl, rel = ["acknowledgement"]}]),
+				{200, [AckLink | Headers], Message#message.body};
+			_  ->
+				spawn(fun() -> catch MsgMod:acknowledge(Message) end),
+				{200, Headers, Message#message.body}					
+		end				
 	end.	
 
 %% Message Batches	
@@ -243,7 +256,11 @@ destination_url(Destination) ->
 
 full_destination_url(Scheme, DestName, Path) ->
 	Host = get_option('Host', [], Request#request.headers),
-	Scheme ++ "://" ++ Host ++ destination_url(DestName) ++ "/" ++ Path.		
+	ReqPath = destination_url(DestName) ++ "/" ++ Path,
+	case Host of
+		[] -> ReqPath;
+		_  -> Scheme ++ "://" ++ Host ++ ReqPath
+	end.			
 	
 expires_header(DateTime, TtlSeconds) ->
 	Sec = calendar:datetime_to_gregorian_seconds(DateTime),
@@ -251,4 +268,4 @@ expires_header(DateTime, TtlSeconds) ->
 	httpd_util:rfc1123_date(ExpireDatetime).
 
 make_etag(Term) ->
-	"\"" ++ yarmo_bin_util:md5(Term, 36)  ++ "\"".
+	yarmo_bin_util:etag(Term).

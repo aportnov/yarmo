@@ -200,8 +200,7 @@ acknowledge_message_test_() ->
 		 		{update, {{id, <<"message-id">>}, {rev, <<"newRev">>}}}]),
 		Assert({error, bad_request}, [{read, [{<<"consumed_timestamp">>, 11222} | Document]},
 		 		{update, {{id, <<"message-id">>}, {rev, {bad_request, bad_request}}}}])
-	].
-		
+	].		
 
 test_mod() ->
 	test_mod([]).
