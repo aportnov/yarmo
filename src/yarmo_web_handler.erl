@@ -145,9 +145,11 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 		case AckMode of
 			"single" ->
 				ETag = yarmo_bin_util:md5({consumed_timestamp, Timestamp}, 36),
-				AckUrl = full_destination_url("http", Name, string:join(["messages", MsgId, "acknowledgement;etag=" ++ ETag], "/")),
-				AckLink = yarmo_link_util:link_header([#link{href = AckUrl, rel = ["acknowledgement"]}]),
-				{200, [AckLink | Headers], Message#message.body};
+				Path = string:join(["messages", MsgId, "acknowledgement;etag=" ++ ETag], "/"),
+				
+				AckLink = #link{href = full_destination_url("http", Name, Path), rel = ["acknowledgement"]},
+
+				{200, [yarmo_link_util:link_header([AckLink]) | Headers], Message#message.body};
 			_  ->
 				spawn(fun() -> catch MsgMod:acknowledge(Message) end),
 				{200, Headers, Message#message.body}					
