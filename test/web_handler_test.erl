@@ -176,14 +176,6 @@ consume_bad_rev_test() ->
 	Mod = handler_mod(Request, Store),
 	{400, [], <<"bad_rev">>} = Mod:handle().
 	
-acknowledge_message_bad_request_test() ->
-	Request = #request{context_root = "queues", method = 'POST', 
-		path = ["existing", "queue", "messages", "message-id", "acknowledgement", "etag=8LPPTETYA9X636KIRE9L45L9E"], 
-		params = [], headers = []},
-    
-    Mod = handler_mod(Request, mock_store:new([])),
-    {400, [], <<"acknowledgement parameter is required">>} = Mod:handle().		
-	
 acknowledge_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "messages", "message-id", "acknowledgement", "etag=8LPPTETYA9X636KIRE9L45L9E"], 
@@ -205,13 +197,12 @@ acknowledge_message_test_() ->
 		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
 	end,	
 	[
+		Assert({400, [], <<"acknowledgement parameter is required">>}, Document, Request#request{params = []}),
 		Assert({404, [], <<"Not Found.">>}, not_found, Request),
 		Assert({412, [], <<"Preconditions Failed">>}, [{?l2b("consumed_timestamp"), 1288} | Document], Request),
 		Assert({204, [], []}, [{?l2b("consumed_timestamp"), 12345} | Document], Request),
 		Assert({204, [], []}, [{?l2b("consumed_timestamp"), 12345} | Document], Request#request{params = [{acknowledgement, "false"}]})
 	].	
-		
-	
 
 %% POST Create Message Batch				
 	
