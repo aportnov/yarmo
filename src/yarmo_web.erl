@@ -51,7 +51,7 @@ request_data(Req) ->
 		
 	#request{
 		method = Method, 
-		path = string:tokens(Path, "/"), 
+		path = string:tokens(Path, "/;"), 
 		peer = Req:get(peer),
 		params = Req:parse_qs(),
 		headers = mochiweb_headers:to_list(Req:get(headers)),

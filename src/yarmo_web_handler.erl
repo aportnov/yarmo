@@ -44,6 +44,9 @@ handle_post() ->
 			with_destination(lists:reverse(Destination), fun post_batch/1);
 		["poller" | Destination] ->
 			with_destination(lists:reverse(Destination), fun consume_message/1);		
+		[AckTag, "acknowledgement", MessageId, "messages" | _Destination] when length(_Destination) > 0 ->
+			["etag", Tag] = string:tokens(AckTag, "="),
+		    acknowledge_message(MessageId, Tag);			
 		_ -> {405, [], <<"Method Not Allowed.">>}
 	end.
 	
@@ -135,11 +138,9 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
     MsgMod = yarmo_message:new(Store),
 	case MsgMod:consume(Destination) of
 	  not_found -> 
-		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};
-			
+		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};			
 	  {error, Error} -> 
-		{400, [], yarmo_bin_util:thing_to_bin(Error)};		
-		
+		{400, [], yarmo_bin_util:thing_to_bin(Error)};				
 	  #message{id = MsgId, consumed_timestamp = Timestamp} = Message ->		
 		Headers = [{'Content-Location', MessageUrlFun(message, MsgId)} | Message#message.headers],
 		
@@ -157,7 +158,31 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 		end				
 	end.	
 
+acknowledge_message(MessageId, ETag) ->
+    MsgMod = yarmo_message:new(Store),
+	
+	case get_option('acknowledgement', [], Request#request.params) of
+		[]  -> {400, [], <<"acknowledgement parameter is required">>};
+		Ack ->
+			case MsgMod:find(MessageId) of
+			  not_found -> {404, [], <<"Not Found.">>};
+			  #message{consumed_timestamp = Timestamp} = Message ->
+				case yarmo_bin_util:md5({consumed_timestamp, Timestamp}, 36) of
+					ETag when Ack =:= "true" ->
+				  		spawn(fun() -> catch MsgMod:acknowledge(Message) end),
+						{204, [], []};
+				  	ETag -> 
+						spawn(fun() -> catch MsgMod:update(Message#message{consumed_timestamp = []}) end),
+						{204, [], []};
+				  	_ -> {412, [], <<"Preconditions Failed">>}		
+				end	 
+			end			
+	end.			
+
+
 %% Message Batches	
+%% TODO - do I need to link messages to the batches? How do I get them? I can store a URI-list as a body of a batch... and return that?
+%% I think getting batch from topic is different... it is just a batch of messages
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
 	MsgMod = yarmo_message:new(Store),

@@ -5,7 +5,7 @@
 -include("../src/yarmo.hrl").
 
 %% GET Message 
-get_existing_message_test() ->
+existing_message_test() ->
 	Request = #request{context_root = "queues", method = 'GET', path = ["sample", "queue", "messages", "message-id"]}, 
 	
 	JsonHeaders = [
@@ -29,7 +29,7 @@ get_existing_message_test() ->
 	Headers = [{'X-H-One', "sample-one"}, {'X-Powered-By', "Erlang"}],
 	Body = "Sample Body".
 
-get_message_not_found_test() ->
+message_not_found_test() ->
 	Request = #request{context_root = "queues", method = 'GET', path = ["sample", "queue","messages", "message-id"]}, 
 	Store = mock_store:new([{read, not_found}]),
 	
@@ -37,7 +37,7 @@ get_message_not_found_test() ->
 	{404, [], _} = Mod:handle().
 
 %% GET/HEAD Relationships
-get_existing_queue_relationships_test() ->
+existing_queue_relationships_test() ->
 	Request = #request{
 		context_root = "queues", 
 		method = 'HEAD', 
@@ -50,7 +50,7 @@ get_existing_queue_relationships_test() ->
 	{200, Headers, []} = Mod:handle(),
 	[{'Link', _Link}, {'Cache-Control', _CC}, {'Expires', _Expires}, {'ETag', _Tag}] = Headers.
 
-get_nonexisting_queue_relationships_test() ->
+nonexisting_queue_relationships_test() ->
 	Request = #request{
 		context_root = "queues", 
 		method = 'HEAD', 
@@ -63,7 +63,7 @@ get_nonexisting_queue_relationships_test() ->
 	{404, [], _} = Mod:handle().
 
 %% PUT Create Destination
-put_create_new_destination_test() ->
+create_new_destination_test() ->
 	Request = #request{
 		context_root = "queues", 
 		method = 'PUT', 
@@ -76,7 +76,7 @@ put_create_new_destination_test() ->
 	{201, Headers, []} = Mod:handle(),
 	[{'Location', _Loc}, {'Message-Ack-Mode',"single"}, {'Message-MAX-TTL', "100"}, {'Message-Reply-Time', "40"}] = Headers.
 
-put_create_existing_destination_test() ->
+create_existing_destination_test() ->
 	Request = #request{
 		context_root = "queues", 
 		method = 'PUT', 
@@ -90,7 +90,7 @@ put_create_existing_destination_test() ->
 	{204, [], []} = Mod:handle().
 
 %% POST Create Message
-post_create_message_test_() ->
+create_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "incoming"], params = [], headers = []},
 	
@@ -110,7 +110,7 @@ post_create_message_test_() ->
 
 %% POST Consume Message (Queue)
 
-post_consume_message_from_queue_test_() ->
+consume_message_from_queue_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "poller"], params = [], headers = []},
 		
@@ -146,7 +146,9 @@ post_consume_message_from_queue_test_() ->
 		end)	
     ].					
 
-post_consume_empty_queue_test() ->	
+
+
+consume_empty_queue_test() ->	
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "poller"], params = [], headers = []},
 		
@@ -154,7 +156,7 @@ post_consume_empty_queue_test() ->
 	Mod = handler_mod(Request, Store),
 	{503, [{'Retry-After', "5"}], <<"Service Unavailable">>} = Mod:handle().
 
-post_consume_bad_rev_test() ->
+consume_bad_rev_test() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "poller"], params = [], headers = []},
 
@@ -172,7 +174,44 @@ post_consume_bad_rev_test() ->
 	end,		
 	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}]),
 	Mod = handler_mod(Request, Store),
-	{400, [], <<"bad_rev">>} = Mod:handle().	
+	{400, [], <<"bad_rev">>} = Mod:handle().
+	
+acknowledge_message_bad_request_test() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "messages", "message-id", "acknowledgement", "etag=8LPPTETYA9X636KIRE9L45L9E"], 
+		params = [], headers = []},
+    
+    Mod = handler_mod(Request, mock_store:new([])),
+    {400, [], <<"acknowledgement parameter is required">>} = Mod:handle().		
+	
+acknowledge_message_test_() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "messages", "message-id", "acknowledgement", "etag=8LPPTETYA9X636KIRE9L45L9E"], 
+		params = [{acknowledgement, "true"}], headers = []},
+	
+	Document = [
+			{?l2b("_id"), ?l2b("message-id")},
+			{?l2b("_rev"), ?l2b("Rev")},
+			{?l2b("type"), ?l2b("message")},
+			{?l2b("destination"), ?l2b("queue:existing.queue") },
+			{?l2b("max_ttl"), 222 },
+			{?l2b("body"), <<"Sample Body">> },
+			{?l2b("created_timestamp"), ?timestamp()}
+	],
+	
+	Assert = fun(ExpectedResponse, Doc, Req) ->
+		Store = mock_store:new([{read, Doc}]),
+		Mod = handler_mod(Req, Store),
+		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
+	end,	
+	[
+		Assert({404, [], <<"Not Found.">>}, not_found, Request),
+		Assert({412, [], <<"Preconditions Failed">>}, [{?l2b("consumed_timestamp"), 1288} | Document], Request),
+		Assert({204, [], []}, [{?l2b("consumed_timestamp"), 12345} | Document], Request),
+		Assert({204, [], []}, [{?l2b("consumed_timestamp"), 12345} | Document], Request#request{params = [{acknowledgement, "false"}]})
+	].	
+		
+	
 
 %% POST Create Message Batch				
 	
