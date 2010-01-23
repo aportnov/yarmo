@@ -27,8 +27,10 @@ handle_get()	->
 	case lists:reverse(Request#request.path) of
 		[MessageId, "messages" | _Destination ] when length(_Destination) > 0 ->
 			get_message(MessageId);
+		["messages" | Destination] ->
+			with_destination(lists:reverse(Destination), fun get_poe_url/1);		
 		[BatchId, "batches" | Destination] ->
-			get_batch(lists:reverse(Destination), BatchId);
+			get_batch(lists:reverse(Destination), BatchId);	
 		[] ->
 			{404, [], <<"Not Found.">>};
 		Destination ->
@@ -40,7 +42,7 @@ handle_post() ->
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Destination] -> 
 			with_destination(lists:reverse(Destination), fun post_message/1);
-		["batches", "incomming" | Destination] ->
+		["batches", "incoming" | Destination] ->
 			with_destination(lists:reverse(Destination), fun post_batch/1);
 		["poller" | Destination] ->
 			with_destination(lists:reverse(Destination), fun consume_message/1);		
@@ -179,20 +181,33 @@ acknowledge_message(MessageId, ETag) ->
 			end			
 	end.			
 
+get_poe_url(#destination{} = Destination) ->
+	case get_option('POE', [], Request#request.headers) of
+		[]  -> {400, [], <<"POE header is required">>};
+		POE -> get_poe_url(Destination, POE)
+	end.		
+get_poe_url(#destination{name = Name} = Destination, POE) ->
+	MsgMod = yarmo_message:new(Store),
 
-%% Message Batches	
-%% TODO - do I need to link messages to the batches? How do I get them? I can store a URI-list as a body of a batch... and return that?
-%% I think getting batch from topic is different... it is just a batch of messages
+	{id, MsgId} = MsgMod:create_poe_message(Destination, POE),
+
+	Path = string:join(["messages", MsgId], "/"),
+	Link = full_destination_url("http", Name, Path),
+
+	{200, [{'POE-Links', Link}], []}.
+
+%% Message Batches
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
 	MsgMod = yarmo_message:new(Store),
-	Batch = MsgMod:create_batch(#batch{destination = Destination#destination.id, max_ttl = Destination#destination.max_ttl}),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
 		Msg = create_message(MsgMod, Destination, MsgReq),
 		[UrlFun(message, Msg#message.id) | Acc]
 	end,	
 	Body = lists:foldr(MsgFun, [], parse_batch_body()),
+
+	Batch = MsgMod:create_batch(#batch{destination = Destination#destination.id, max_ttl = Destination#destination.max_ttl, body = Body}),
 	
 	{201, [{'Content-Type', "text/uri-list"}, {'Location', UrlFun(batch, Batch#batch.id)}], string:join(Body, "\r\n") }.			
 

@@ -112,7 +112,7 @@ create_message_test_() ->
 
 consume_message_from_queue_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
-		path = ["existing", "queue", "poller"], params = [], headers = []},
+		path = ["existing", "queue", "poller"], params = [], headers = [{'Host', "www.some.com"}]},
 		
 	ViewFun = fun(["message", "undelivered", _]) ->
 		Msg = [
@@ -141,7 +141,7 @@ consume_message_from_queue_test_() ->
 		end),
 		Assert("single", fun(H) -> 
 			[{'Link', Link}, {'Content-Location', _}] = H,
-			["/queues/existing/queue/messages/message-id/acknowledgement", Tag, "rel=\"acknowledgement\""] = string:tokens(Link, "<>; "),
+			["http://www.some.com/queues/existing/queue/messages/message-id/acknowledgement", Tag, "rel=\"acknowledgement\""] = string:tokens(Link, "<>; "),
 			["etag", _T] = string:tokens(Tag, "=")
 		end)	
     ].					
@@ -204,7 +204,55 @@ acknowledge_message_test_() ->
 		Assert({204, [], []}, [{?l2b("consumed_timestamp"), 12345} | Document], Request#request{params = [{acknowledgement, "false"}]})
 	].	
 
-%% POST Create Message Batch				
+%% POST Create Message Batch
+
+create_batch_from_atom_feed_test() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "incoming", "batches"], 
+		params = [], headers = [{'Content-Type', "application/atom+xml"}], body = mock_feed()},
+	
+	CreateFun = 
+		fun(["urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a", _]) ->
+			{{id, <<"urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a">>}, {rev, <<"MsgRev">>}};
+		([_Doc]) -> {{id, <<"batch-id">>}, {rev, <<"BatchRev">>}}
+	end,
+	
+	Store = mock_store:new([{read, mock_dest()}, {create, CreateFun}]),		
+	Mod = handler_mod(Request, Store),
+	
+	{201, [{'Content-Type', "text/uri-list"}, {'Location', Location}], Body } = Mod:handle(),
+	?assertEqual("/queues/existing/queue/batches/batch-id", Location),
+	?assertEqual("/queues/existing/queue/messages/urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a", Body).  							
+
+%% HEAD Retrieve POE URL
+retrive_poe_message_url_test_() ->
+	Request = #request{context_root = "queues", method = 'HEAD', 
+		path = ["existing", "queue", "messages"], params = [], 
+		headers = [{'POE', "11"}]},
+		
+	ReadFun = fun(Callback) ->
+		DestFun = mock_dest(),
+		fun(["queue:existing.queue"]) -> DestFun(["queue:existing.queue"]);
+		([Key]) -> Callback([Key])
+		end
+	end,			
+
+    CreateFun = fun([Doc]) ->
+	    {value, {_, <<"poe-message">>}} = lists:keysearch(<<"type">>, 1, Doc),
+		{{id, <<"poe-id">>}, {rev, <<"POERev">>}}
+	end,    
+
+    Assert = fun(ExpectedResponse, Req, POECallback) ->
+		Store = mock_store:new([{read, ReadFun(POECallback)}, {create, CreateFun}]),
+		Mod = handler_mod(Req, Store),
+		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
+	end,
+   
+    [
+		Assert({400, [], <<"POE header is required">>}, Request#request{headers = []}, fun([_K]) -> not_found end),
+		Assert({200, [{'POE-Links', "/queues/existing/queue/messages/poe-id"}], []}, Request, fun([_K]) -> not_found end)
+	]. 	
+
 	
 %% Helper Functions
 
@@ -224,3 +272,19 @@ mock_dest(AckMode) ->
 
 handler_mod(#request{} = Request, Store) ->	
 	yarmo_web_handler:new(Request, Store).
+	
+mock_feed() ->
+	"<?xml version='1.0' encoding='utf-8'?>
+	<feed xmlns='http://www.w3.org/2005/Atom'>
+	  <title>Example Feed</title>
+	  <link href='http://example.org/'/>
+	  <updated>2003-12-13T18:30:02Z</updated>
+	  <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+	  <entry>
+	    <title>Atom-Powered Robots Run Amok 1</title>
+	    <link href='http://example.org/2003/12/13/atom03'/>
+	    <id>urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a</id>
+	    <updated>2003-12-13T18:30:02Z</updated>
+	    <summary>Some text.</summary>
+	  </entry>
+	</feed>".	

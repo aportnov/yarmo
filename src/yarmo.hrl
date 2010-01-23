@@ -16,7 +16,7 @@
 
 -record(message, {destination, id = generated, rev, max_ttl, headers = [], body, created_timestamp, consumed_timestamp, acknowledged_timestamp}).
 
--record(batch, {destination, id, rev, max_ttl, created_timestamp}).
+-record(batch, {destination, id, rev, max_ttl, body, created_timestamp}).
 
 -record(link, {href, rel = ["alternate"], title, anchor, extensions = []}).
 

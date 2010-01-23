@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/1, update/1, find/1, create_batch/1, find_batch/1, consume/1, consume/2, acknowledge/1]).
+-export([create/1, update/1, find/1, create_batch/1, find_batch/1, consume/1, consume/2, acknowledge/1, create_poe_message/2]).
 
 %% For testing
 -export([headers2json/1, json2headers/1, message2doc/1, doc2message/1]).
@@ -53,6 +53,17 @@ find_batch(BatchId) ->
 		not_found -> not_found;
 		Batch -> doc2batch(Batch)
 	end.		
+	
+create_poe_message(#destination{id = DestId, max_ttl = MaxTtl}, POE) ->
+	Document = [
+		{?l2b("type"), ?l2b("poe-message")},
+		{?l2b("destination"), ?l2b(DestId) },
+		{?l2b("max_ttl"), MaxTtl },
+		{?l2b("poe"), ?l2b(POE)},
+		{?l2b("created_timestamp"), ?timestamp()}
+	],	
+	{{id, Id}, {rev, _Rev}} = Store:create(Document),
+	{id, ?b2l(Id)}.
 	
 consume(#destination{type = "queue"} = Destination) ->
 	Callback = fun(#message{} = Messsage) ->
@@ -115,7 +126,6 @@ doc2message(Doc) ->
 	}.
 	
 message2doc(#message{} = Message) ->
-	
 	
 	Properties = [
 		{?l2b("type"), ?l2b("message")},

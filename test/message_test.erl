@@ -105,6 +105,26 @@ create_batch_test() ->
 		max_ttl = 300
 	} = Mod:create_batch(Batch).	
 
+create_message_poe_test() ->
+	CreateFun = fun([Doc]) ->
+	  Val = fun(Name) ->
+		case lists:keysearch(list_to_binary(Name), 1, Doc) of
+			false -> [];
+			{value, {_Name, Value}} -> Value
+		end
+	  end,	
+		
+	  ?assertEqual(<<"poe-message">>, Val("type")),
+	  ?assertEqual(<<"queue:sample.queue">>, Val("destination")),	
+	  ?assertEqual(<<"POE">>, Val("poe")),
+	  ?assertEqual(1800, Val("max_ttl")),
+	
+	  {{id, <<"id">>}, {rev, <<"Rev">>}}	
+	end	,
+	
+	Mod = test_mod([{create, CreateFun}]),
+	Mod:create_poe_message(#destination{id = "queue:sample.queue", type = "queue"}, "POE").
+
 consume_message_test_() ->
 	Document = [
 		{<<"_id">>, <<"message-id">>},
