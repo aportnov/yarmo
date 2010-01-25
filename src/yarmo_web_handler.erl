@@ -28,7 +28,7 @@ handle_get()	->
 		[MessageId, "messages" | _Destination ] when length(_Destination) > 0 ->
 			get_message(MessageId);
 		["messages" | Destination] ->
-			with_destination(lists:reverse(Destination), fun get_poe_url/1);		
+			poe_request(lists:reverse(Destination), fun get_poe_url/2);		
 		[BatchId, "batches" | Destination] ->
 			get_batch(lists:reverse(Destination), BatchId);	
 		[] ->
@@ -42,6 +42,8 @@ handle_post() ->
 	case lists:reverse(Request#request.path) of
 	 	["incoming" | Destination] -> 
 			with_destination(lists:reverse(Destination), fun post_message/1);
+		[MessageId, "messages" | Destination] ->
+			poe_request(lists:reverse(Destination), fun(D, POE) -> post_poe_message(D, POE, MessageId) end);
 		["batches", "incoming" | Destination] ->
 			with_destination(lists:reverse(Destination), fun post_batch/1);
 		["poller" | Destination] ->
@@ -121,10 +123,12 @@ get_relationships(Relationships, #destination{name = DestName}) ->
 %% Messages
 post_message(#destination{name = Name} = Destination) ->
 	MessageUrlFun = location_url(Name),
-	Msg = create_message(yarmo_message:new(Store), Destination, Request),
+	MsgMod = yarmo_message:new(Store),
+	
+	Msg = create_message(Destination, Request, fun(Msg) -> MsgMod:create(Msg) end),
 	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
 
-create_message(MsgMod, #destination{id = DestId, max_ttl = MaxTtl}, #request{headers = Headers, body = Body, params = Params}) ->
+create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = Headers, body = Body, params = Params}, CreateFun) ->
 	Document = #message {
 		destination = DestId, 
 		max_ttl     = MaxTtl, 
@@ -132,7 +136,7 @@ create_message(MsgMod, #destination{id = DestId, max_ttl = MaxTtl}, #request{hea
 		body        = Body,
 		id          = get_option('message_id', generated, Params)
 	}, 
-	MsgMod:create(Document).
+	CreateFun(Document).
 
 consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = Destination) ->
 	MessageUrlFun = location_url(Name),
@@ -180,29 +184,36 @@ acknowledge_message(MessageId, ETag) ->
 				end	 
 			end			
 	end.			
-
-get_poe_url(#destination{} = Destination) ->
-	case get_option('POE', [], Request#request.headers) of
-		[]  -> {400, [], <<"POE header is required">>};
-		POE -> get_poe_url(Destination, POE)
-	end.		
+		
 get_poe_url(#destination{name = Name} = Destination, POE) ->
 	MsgMod = yarmo_message:new(Store),
 
 	{id, MsgId} = MsgMod:create_poe_message(Destination, POE),
 
-	Path = string:join(["messages", MsgId], "/"),
-	Link = full_destination_url("http", Name, Path),
-
+	Link = full_destination_url("http", Name, string:join(["messages", MsgId], "/")),
 	{200, [{'POE-Links', Link}], []}.
 
+%% TODO - add POE POST handler test
+post_poe_message(#destination{} = Destination, POE, MessageId) ->
+	MsgMod = yarmo_message:new(Store),
+
+	Fun = fun(Msg) -> MsgMod:update_poe_message(Msg, POE) end,
+	
+	case create_message(Destination, Request#request{params = [{"message_id", MessageId}]}, Fun) of
+		not_found                    -> {404, [], <<"Not Found.">>};
+		{conflict, refetch}          -> {412, [], <<"Preconditions Failed">>}; 
+		{bad_request, poe_missmatch} -> {412, [], <<"Preconditions Failed">>};
+		{bad_request, Error}         -> {400, [], yarmo_bin_util:thing_to_bin(Error)};
+		{ok, {rev, _Rev}}            -> {204, [], []}
+	end.		
+	
 %% Message Batches
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
 	MsgMod = yarmo_message:new(Store),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
-		Msg = create_message(MsgMod, Destination, MsgReq),
+		Msg = create_message(Destination, MsgReq, fun(Doc) -> MsgMod:create(Doc) end),
 		[UrlFun(message, Msg#message.id) | Acc]
 	end,	
 	Body = lists:foldr(MsgFun, [], parse_batch_body()),
@@ -257,6 +268,15 @@ with_destination(Name, FoundCallback, NotFoundCallback) ->
 		Dest      -> FoundCallback(Dest)
 	end.
 
+poe_request(Destination, Callback) ->
+	Fun = fun(D) ->
+		case get_option('POE', [], Request#request.headers) of
+			[]  -> {400, [], <<"POE header is required">>};
+			POE -> Callback(D, POE)
+		end		
+	end,	
+	with_destination(Destination, Fun).
+	
 %% Utility Functions
 
 name_to_destination(Name) ->

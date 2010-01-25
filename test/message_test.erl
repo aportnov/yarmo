@@ -125,6 +125,37 @@ create_message_poe_test() ->
 	Mod = test_mod([{create, CreateFun}]),
 	Mod:create_poe_message(#destination{id = "queue:sample.queue", type = "queue"}, "POE").
 
+update_message_poe_test_() ->
+	Document = [
+		{<<"_id">>, <<"poe-id">>},
+		{<<"_rev">>, <<"some">>},
+		{<<"poe">>, <<"POE">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"max_ttl">>, 300},
+		{<<"created_timestamp">>, 77777}
+	],
+	
+	Assert = fun(ExpectedResponse, MockStore, POE) ->
+		Mod = test_mod(MockStore),
+		fun() ->
+	    	?assertEqual(ExpectedResponse, Mod:update_poe_message(#message{id = "poe-id", destination = "queue:sample.queue"}, POE))
+	    end 
+	end,
+	
+	AssertUpdate = fun(ExpectedResponse, MockRev) ->
+		MockStore = [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, MockRev}}}],
+		Assert(ExpectedResponse, MockStore, "POE")
+	end,	
+	
+	[
+		Assert(not_found, [{read, not_found}], "POE"),
+		Assert({bad_request, poe_missmatch}, [{read, Document}], "WRONG-POE"),
+		
+		AssertUpdate({ok, {rev, "NewRev"}}, <<"NewRev">>),
+		AssertUpdate({bad_request, error}, {bad_request, error}),
+		AssertUpdate({conflict, refetch}, refetch)
+	].
+
 consume_message_test_() ->
 	Document = [
 		{<<"_id">>, <<"message-id">>},
