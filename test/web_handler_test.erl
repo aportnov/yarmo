@@ -253,6 +253,35 @@ retrive_poe_message_url_test_() ->
 		Assert({200, [{'POE-Links', "/queues/existing/queue/messages/poe-id"}], []}, Request, fun([_K]) -> not_found end)
 	]. 	
 
+%% POST Create message with POE link
+create_poe_message_test_() ->
+	Request = #request{context_root = "queues", method = 'POST', 
+		path = ["existing", "queue", "messages", "poe-id"], params = [], 
+		headers = [{'POE', "11"}]},
+
+	Document = [
+		{<<"_id">>, <<"poe-id">>},
+		{<<"_rev">>, <<"some">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"poe">>, <<"11">>},
+		{<<"max_ttl">>, 300},
+		{<<"created_timestamp">>, 77777}
+	],
+
+	Assert = fun(ExpectedResponse, MockStore, Req) ->
+		Store = mock_store:new(MockStore),
+		Mod = handler_mod(Req, Store),
+		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
+	end,
+	
+	[
+		Assert({404, [], <<"Not Found.">>}, [{read, not_found}], Request),
+		Assert({412, [], <<"Preconditions Failed">>}, [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, refetch}}}], Request),
+		Assert({412, [], <<"Preconditions Failed">>}, [{read, Document}], Request#request{headers = [{'POE', "10"}]}),
+		Assert({400, [], <<"error">>}, [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, {bad_request, error}}}}], Request),
+		Assert({204, [], []}, [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, <<"NewRev">>}}}], Request)
+	].	
+	
 	
 %% Helper Functions
 
