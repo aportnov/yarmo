@@ -21,20 +21,15 @@ existing_message_test() ->
 		{?l2b("body"), <<"Sample Body">> },
 		{?l2b("created_timestamp"), ?timestamp()}
 	],
-	Store = mock_store:new([{read, Document}]),
-	
-	Mod = handler_mod(Request, Store),
-	{200, Headers, Body} = Mod:handle(),
+
+	{200, Headers, Body} = execute([{read, Document}], Request),
 	
 	Headers = [{'X-H-One', "sample-one"}, {'X-Powered-By', "Erlang"}],
 	Body = "Sample Body".
 
 message_not_found_test() ->
 	Request = #request{context_root = "queues", method = 'GET', path = ["sample", "queue","messages", "message-id"]}, 
-	Store = mock_store:new([{read, not_found}]),
-	
-	Mod = handler_mod(Request, Store),
-	{404, [], _} = Mod:handle().
+	{404, [], _} = execute([{read, not_found}], Request).
 
 %% GET/HEAD Relationships
 existing_queue_relationships_test() ->
@@ -44,10 +39,8 @@ existing_queue_relationships_test() ->
 		path = ["existing", "queue"],
 		headers = [{'Host', "www.sample-host.com"}]
 	},
-	Store = mock_store:new([{read, mock_dest()}]),
-	Mod = handler_mod(Request, Store),
-	
-	{200, Headers, []} = Mod:handle(),
+
+	{200, Headers, []} = execute([{read, mock_dest()}], Request),
 	[{'Link', _Link}, {'Cache-Control', _CC}, {'Expires', _Expires}, {'ETag', _Tag}] = Headers.
 
 nonexisting_queue_relationships_test() ->
@@ -57,10 +50,8 @@ nonexisting_queue_relationships_test() ->
 		path = ["nonexisting", "queue"],
 		headers = [{'Host', "www.sample-host.com"}]
 	},
-	Store = mock_store:new([{read, not_found}]),
-	Mod = handler_mod(Request, Store),
 	
-	{404, [], _} = Mod:handle().
+	{404, [], _} = execute([{read, not_found}], Request).
 
 %% PUT Create Destination
 create_new_destination_test() ->
@@ -70,10 +61,9 @@ create_new_destination_test() ->
 		path = ["nonexisting", "queue"],
 		headers = [{'Host', "www.sample-host.com"}, {'Message-Max-Ttl', "100"}, {'Message-Reply-Time', "40"}, {'Message-Ack-Mode',"single"}]
 	},
-	Store = mock_store:new([{read, not_found}, {create, {{id, "queue:nonexisting.queue"}, {rev, "rev"}}}]),
-	Mod = handler_mod(Request, Store),
 	
-	{201, Headers, []} = Mod:handle(),
+	MockStore = [{read, not_found}, {create, {{id, "queue:nonexisting.queue"}, {rev, "rev"}}}],
+	{201, Headers, []} = execute(MockStore, Request),
 	[{'Location', _Loc}, {'Message-Ack-Mode',"single"}, {'Message-MAX-TTL', "100"}, {'Message-Reply-Time', "40"}] = Headers.
 
 create_existing_destination_test() ->
@@ -83,29 +73,30 @@ create_existing_destination_test() ->
 		path = ["existing", "queue"],
 		headers = [{'Host', "www.sample-host.com"}, {'Message-Max-Ttl', "100"}, {'Message-Reply-Time', "40"}]
 	},
-
-	Store = mock_store:new([{read, mock_dest()}]),
-	Mod = handler_mod(Request, Store),
 	
-	{204, [], []} = Mod:handle().
+	{204, [], []} = execute([{read, mock_dest()}], Request).
 
 %% POST Create Message
 create_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "incoming"], params = [], headers = []},
 	
-	Assert = fun(CreateFun, Req, MsgId) ->
+	Assert = fun(Req, MsgId) ->
+		CreateFun = case Req of
+			#request{params = []} -> 
+				fun([_Doc]) -> {{id, <<"message-id">>}, {rev, <<"Rev">>}} end;
+			#request{params = [{"message_id", Id}]} ->
+				fun([Id, _Doc]) -> {{id, ?l2b(Id)}, {rev, <<"Rev">>}} end
+		end,	
 		fun() ->
-			Store = mock_store:new([{read, mock_dest()},{create, CreateFun}]),
-			Mod = handler_mod(Req, Store),
-			{201, Headers, []} = Mod:handle(),
+			{201, Headers, []} = execute([{read, mock_dest()},{create, CreateFun}], Req),
 			[{'Location', "/queues/existing/queue/messages/" ++ MsgId}] = Headers			
 		end	
 	end,			
 	
 	[
-		Assert(fun([_Doc]) -> {{id, <<"message-id">>}, {rev, <<"Rev">>}} end, Request, "message-id"),
-		Assert(fun(["m-id", _Doc]) -> {{id, <<"m-id">>}, {rev, <<"Rev">>}} end, Request#request{params = [{"message_id", "m-id"}]}, "m-id")
+		Assert(Request, "message-id"),
+		Assert(Request#request{params = [{"message_id", "m-id"}]}, "m-id")
 	].
 
 %% POST Consume Message (Queue)
@@ -130,9 +121,8 @@ consume_message_from_queue_test_() ->
 	UpdateFun = fun(["message-id", "oldRev", _]) -> {{id, <<"message-id">>}, {rev, <<"newRev">>}} end,
 	
 	Assert = fun(AckMode, HeaderCheck) ->
-		Store = mock_store:new([{read, mock_dest(AckMode)}, {view, ViewFun}, {update, UpdateFun}]),
-		Mod = handler_mod(Request, Store),
-		fun() -> {200, Headers, "Sample Body" } = Mod:handle(), HeaderCheck(Headers) end
+		MockStore = [{read, mock_dest(AckMode)}, {view, ViewFun}, {update, UpdateFun}],
+		fun() -> {200, Headers, "Sample Body" } = execute(MockStore, Request), HeaderCheck(Headers) end
 	end,		
 	
     [
@@ -152,9 +142,7 @@ consume_empty_queue_test() ->
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "poller"], params = [], headers = []},
 		
-	Store = mock_store:new([{read, mock_dest()},{view, []}]),
-	Mod = handler_mod(Request, Store),
-	{503, [{'Retry-After', "5"}], <<"Service Unavailable">>} = Mod:handle().
+	{503, [{'Retry-After', "5"}], <<"Service Unavailable">>} = execute([{read, mock_dest()},{view, []}], Request).
 
 consume_bad_rev_test() ->
 	Request = #request{context_root = "queues", method = 'POST', 
@@ -172,9 +160,9 @@ consume_bad_rev_test() ->
 		],
 		[Msg]
 	end,		
-	Store = mock_store:new([{read, mock_dest()},{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}]),
-	Mod = handler_mod(Request, Store),
-	{400, [], <<"bad_rev">>} = Mod:handle().
+
+	MockStore = [{read, mock_dest()},{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}],
+	{400, [], <<"bad_rev">>} = execute(MockStore, Request).
 	
 acknowledge_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
@@ -192,9 +180,7 @@ acknowledge_message_test_() ->
 	],
 	
 	Assert = fun(ExpectedResponse, Doc, Req) ->
-		Store = mock_store:new([{read, Doc}]),
-		Mod = handler_mod(Req, Store),
-		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
+		fun() -> ?assertEqual(ExpectedResponse, execute([{read, Doc}], Req)) end
 	end,	
 	[
 		Assert({400, [], <<"acknowledgement parameter is required">>}, Document, Request#request{params = []}),
@@ -230,11 +216,9 @@ retrive_poe_message_url_test_() ->
 		path = ["existing", "queue", "messages"], params = [], 
 		headers = [{'POE', "11"}]},
 		
-	ReadFun = fun(Callback) ->
-		DestFun = mock_dest(),
-		fun(["queue:existing.queue"]) -> DestFun(["queue:existing.queue"]);
-		([Key]) -> Callback([Key])
-		end
+	ReadFun =
+		fun(["queue:existing.queue"]) -> (mock_dest())(["queue:existing.queue"]);
+		([_Key]) -> fun([_K]) -> not_found end
 	end,			
 
     CreateFun = fun([Doc]) ->
@@ -242,15 +226,13 @@ retrive_poe_message_url_test_() ->
 		{{id, <<"poe-id">>}, {rev, <<"POERev">>}}
 	end,    
 
-    Assert = fun(ExpectedResponse, Req, POECallback) ->
-		Store = mock_store:new([{read, ReadFun(POECallback)}, {create, CreateFun}]),
-		Mod = handler_mod(Req, Store),
-		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
+    Assert = fun(ExpectedResponse, Req) ->
+		fun() -> ?assertEqual(ExpectedResponse, execute([{read, ReadFun}, {create, CreateFun}], Req)) end
 	end,
    
     [
-		Assert({400, [], <<"POE header is required">>}, Request#request{headers = []}, fun([_K]) -> not_found end),
-		Assert({200, [{'POE-Links', "/queues/existing/queue/messages/poe-id"}], []}, Request, fun([_K]) -> not_found end)
+		Assert({400, [], <<"POE header is required">>}, Request#request{headers = []}),
+		Assert({200, [{'POE-Links', "/queues/existing/queue/messages/poe-id"}], []}, Request)
 	]. 	
 
 %% POST Create message with POE link
@@ -269,21 +251,28 @@ create_poe_message_test_() ->
 	],
 
 	Assert = fun(ExpectedResponse, MockStore, Req) ->
-		Store = mock_store:new(MockStore),
-		Mod = handler_mod(Req, Store),
-		fun() -> ?assertEqual(ExpectedResponse, Mod:handle()) end
+		fun() -> ?assertEqual(ExpectedResponse, execute(MockStore, Req)) end
 	end,
 	
+	MockStore = fun(not_found) -> [{read, not_found}];
+		           (Rev) -> [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, Rev}}}]
+	end,	
+	
 	[
-		Assert({404, [], <<"Not Found.">>}, [{read, not_found}], Request),
-		Assert({412, [], <<"Preconditions Failed">>}, [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, refetch}}}], Request),
-		Assert({412, [], <<"Preconditions Failed">>}, [{read, Document}], Request#request{headers = [{'POE', "10"}]}),
-		Assert({400, [], <<"error">>}, [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, {bad_request, error}}}}], Request),
-		Assert({204, [], []}, [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, <<"NewRev">>}}}], Request)
+		Assert({404, [], <<"Not Found.">>}, MockStore(not_found), Request),
+		Assert({412, [], <<"Preconditions Failed">>}, MockStore(refetch), Request),
+		Assert({412, [], <<"Preconditions Failed">>}, MockStore([]), Request#request{headers = [{'POE', "10"}]}),
+		Assert({400, [], <<"error">>}, MockStore({bad_request, error}), Request),
+		Assert({204, [], []}, MockStore(<<"NewRev">>), Request)
 	].	
 	
 	
 %% Helper Functions
+execute(MockStore, Request) ->
+	Store = mock_store:new(MockStore),
+	Mod = handler_mod(Request, Store),
+	Mod:handle().
+	
 
 mock_dest() ->
 	mock_dest("auto").
