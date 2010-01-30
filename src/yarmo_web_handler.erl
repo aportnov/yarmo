@@ -28,7 +28,11 @@ handle_get()	->
 		[MessageId, "messages" | _Destination ] when length(_Destination) > 0 ->
 			get_message(MessageId);
 		["messages" | Destination] ->
-			poe_request(lists:reverse(Destination), fun get_poe_url/2);		
+			poe_request(lists:reverse(Destination), fun get_poe_url/2);	
+		["last", "poller" | Destination] ->
+			with_destination(lists:reverse(Destination), fun consume_message/1);			
+		["first", "poller" | Destination] ->
+			with_destination(lists:reverse(Destination), fun first_message/1);			
 		[BatchId, "batches" | Destination] ->
 			get_batch(lists:reverse(Destination), BatchId);	
 		[] ->
@@ -162,7 +166,27 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 				spawn(fun() -> catch MsgMod:acknowledge(Message) end),
 				{200, Headers, Message#message.body}					
 		end				
-	end.	
+	end;	
+consume_message(#destination{name = Name, type = "topic"} = Destination) ->
+	MessageUrlFun = location_url(Name),
+	
+	LinkFun = fun(Path, Rel) -> #link{href= full_destination_url("http", Name, Path), rel = [Rel]} end,	
+	
+    MsgMod = yarmo_message:new(Store),
+	case MsgMod:consume(Destination) of
+	  not_found -> 
+		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};			
+	  #message{id = MsgId, created_timestamp = Timestamp} = Message ->		
+		Headers = [{'Content-Location', MessageUrlFun(message, MsgId)} | Message#message.headers],
+
+		ETag = yarmo_bin_util:md5({created_timestamp, Timestamp}, 36),
+		Path = string:join(["poller", "next", ETag], "/"),
+
+		{200, [yarmo_link_util:link_header([LinkFun([], "generator"), LinkFun(Path, "next")]) | Headers], Message#message.body}
+	end.
+
+first_message(#destination{name = Name, type = "topic"} = Destination) ->
+	[].
 
 acknowledge_message(MessageId, ETag) ->
     MsgMod = yarmo_message:new(Store),
@@ -318,11 +342,13 @@ destination_url(Destination) ->
 	"/" ++ Request#request.context_root ++ "/" ++ string:join(Destination, "/").	
 
 full_destination_url(Scheme, DestName, Path) ->
-	Host = get_option('Host', [], Request#request.headers),
-	ReqPath = destination_url(DestName) ++ "/" ++ Path,
-	case Host of
-		[] -> ReqPath;
-		_  -> Scheme ++ "://" ++ Host ++ ReqPath
+	ReqPath = case Path of
+		[] -> destination_url(DestName);
+		_  -> destination_url(DestName) ++ "/" ++ Path
+	end,	
+	case get_option('Host', [], Request#request.headers) of
+		[]   -> ReqPath;
+		Host -> Scheme ++ "://" ++ Host ++ ReqPath
 	end.			
 	
 expires_header(DateTime, TtlSeconds) ->

@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/1, update/1, find/1, consume/1, consume/2, acknowledge/1]).
+-export([create/1, update/1, find/1, consume/1, acknowledge/1]).
 -export([create_batch/1, find_batch/1]).
 -export([create_poe_message/2, update_poe_message/2]).
 
@@ -94,11 +94,7 @@ consume(#destination{type = "topic"} = Destination) ->
 	consume(Destination, fun(#message{} = M) -> M end).
 	
 consume(#destination{id = Id}, Callback) ->
-	Key = fun(TimeStamp) -> ( [$[, $"] ++ Id ++ [$", $,, 32] ++ integer_to_list(TimeStamp) ++ [$]] ) end,	
-
-	Options = [{limit, 1}, {descending, true}, {startkey, Key(?timestamp())}, {endkey, Key(0)}],
-	
-	case Store:view("message", "undelivered", Options) of
+	case undelivered({{id, Id}, {timestamp, ?timestamp()}}, descending, 1) of
 		[] -> not_found;
 		[Message | _] -> Callback(doc2message(Message))
 	end.	
@@ -117,6 +113,24 @@ acknowledge(#message{id = Id}) ->
 	end.	
 	
 %% Private API	
+undelivered({{id, Id}, {timestamp, TimeStamp}}, Order, Limit) ->
+	Key = fun(T) -> ( [$[, $"] ++ Id ++ [$", $,, 32] ++ integer_to_list(T) ++ [$]] ) end,
+	
+	Options = case Order of
+		ascending  ->
+			[{limit, Limit}, {startkey, Key(TimeStamp)}, {endkey, Key(?timestamp())}];
+		descending ->	
+			[{limit, Limit}, {descending, true}, {startkey, Key(TimeStamp)}, {endkey, Key(0)}]
+	end,	
+
+	case Store:view("message", "undelivered", Options) of
+		[]       -> [];
+		Messages ->
+			case Order of
+				ascending -> lists:reverse(Messages);
+				_         -> Messages
+			end	
+	end.		
 	
 doc2message(Doc) ->
 	BinFun = fun yarmo_bin_util:bin_to_list/1,	

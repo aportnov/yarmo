@@ -86,7 +86,7 @@ create_message_test_() ->
 			#request{params = []} -> 
 				fun([_Doc]) -> {{id, <<"message-id">>}, {rev, <<"Rev">>}} end;
 			#request{params = [{"message_id", Id}]} ->
-				fun([Id, _Doc]) -> {{id, ?l2b(Id)}, {rev, <<"Rev">>}} end
+				fun([I, _Doc]) when I =:= Id -> {{id, ?l2b(Id)}, {rev, <<"Rev">>}} end
 		end,	
 		fun() ->
 			{201, Headers, []} = execute([{read, mock_dest()},{create, CreateFun}], Req),
@@ -136,8 +136,6 @@ consume_message_from_queue_test_() ->
 		end)	
     ].					
 
-
-
 consume_empty_queue_test() ->	
 	Request = #request{context_root = "queues", method = 'POST', 
 		path = ["existing", "queue", "poller"], params = [], headers = []},
@@ -163,6 +161,26 @@ consume_bad_rev_test() ->
 
 	MockStore = [{read, mock_dest()},{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}],
 	{400, [], <<"bad_rev">>} = execute(MockStore, Request).
+
+consume_message_from_topic_test() ->
+	Request = #request{context_root = "topics", method = 'GET', 
+		path = ["existing", "topic", "poller", "last"], params = [], headers = [{'Host', "www.some.com"}]},
+		
+	ViewFun = fun(["message", "undelivered", _]) ->
+		Msg = [
+			{?l2b("_id"), ?l2b("message-id")},
+			{?l2b("_rev"), ?l2b("oldRev")},
+			{?l2b("type"), ?l2b("message")},
+			{?l2b("destination"), ?l2b("topic:existing.topic") },
+			{?l2b("max_ttl"), 222 },
+			{?l2b("body"), <<"Sample Body">> },
+			{?l2b("created_timestamp"), ?timestamp()}
+		],
+		[Msg]
+	end,
+	{200, [{'Link', Link}, {'Content-Location', _}], "Sample Body" } = execute([{read, mock_dest()}, {view, ViewFun}], Request),
+	["http://www.some.com/topics/existing/topic", "rel=\"generator\"", NextLink, "rel=\"next\""] = string:tokens(Link, "<>,; "),
+	["http","www.some.com","topics","existing","topic","poller","next", _Tag] = string:tokens(NextLink, "/:").
 	
 acknowledge_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
@@ -284,6 +302,12 @@ mock_dest(AckMode) ->
 			{?l2b("type"), ?l2b("queue")},
 			{?l2b("ack_mode"), ?l2b(AckMode)},
 			{?l2b("name"), ?l2b("existing.queue")}
+		];
+	(["topic:existing.topic"]) ->
+		[
+			{?l2b("_id"),  ?l2b("topic:existing.topic")},
+			{?l2b("type"), ?l2b("topic")},
+			{?l2b("name"), ?l2b("existing.topic")}
 		]
 	end.
 					
