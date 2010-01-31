@@ -162,9 +162,8 @@ consume_bad_rev_test() ->
 	MockStore = [{read, mock_dest()},{view, ViewFun}, {update, {{id, <<"message-id">>}, {rev, {bad_request, bad_rev}}}}],
 	{400, [], <<"bad_rev">>} = execute(MockStore, Request).
 
-consume_message_from_topic_test() ->
-	Request = #request{context_root = "topics", method = 'GET', 
-		path = ["existing", "topic", "poller", "last"], params = [], headers = [{'Host', "www.some.com"}]},
+consume_message_from_topic_test_() ->
+	Request = #request{context_root = "topics", method = 'GET', params = [], headers = [{'Host', "www.some.com"}]},
 		
 	ViewFun = fun(["message", "undelivered", _]) ->
 		Msg = [
@@ -178,9 +177,27 @@ consume_message_from_topic_test() ->
 		],
 		[Msg]
 	end,
-	{200, [{'Link', Link}, {'Content-Location', _}], "Sample Body" } = execute([{read, mock_dest()}, {view, ViewFun}], Request),
-	["http://www.some.com/topics/existing/topic", "rel=\"generator\"", NextLink, "rel=\"next\""] = string:tokens(Link, "<>,; "),
-	["http","www.some.com","topics","existing","topic","poller","next", _Tag] = string:tokens(NextLink, "/:").
+	
+	AssertLinkHeader = fun(LinkHeader) ->
+		[
+			#link{href = "http://www.some.com/topics/existing/topic", rel = ["generator"]},
+			#link{href = NextLink, rel = ["next"]}
+		] = split_link(LinkHeader),
+		[_Tag, "next" | _BaseUrl] = lists:reverse(string:tokens(NextLink, "/:"))		
+	end,
+	
+	Assert = fun(#request{} = Req) ->
+		MockStore = [{read, mock_dest()}, {view, ViewFun}],
+		fun() ->
+			{200, Headers, "Sample Body" } = execute(MockStore, Req),
+			[{'Link', Link}, {'Content-Location', _}] = Headers,
+			AssertLinkHeader(Link)
+	    end
+	end,	
+	[
+		Assert(Request#request{path = ["existing", "topic", "poller", "last"]}),
+		Assert(Request#request{path = ["existing", "topic", "poller", "first"]})
+	].
 	
 acknowledge_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
@@ -286,6 +303,13 @@ create_poe_message_test_() ->
 	
 	
 %% Helper Functions
+split_link(LinkHeader) ->
+	Pred = fun(Link, Acc) ->                                                                                           
+		[Href, "rel", Rel] = string:tokens(Link, "<>; \"="),
+		[#link{href = Href, rel = [Rel]} | Acc]
+	end,
+	lists:foldr(Pred, [], string:tokens(LinkHeader, ",")).
+
 execute(MockStore, Request) ->
 	Store = mock_store:new(MockStore),
 	Mod = handler_mod(Request, Store),

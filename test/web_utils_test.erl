@@ -15,10 +15,6 @@ expires_header_test() ->
 	DateTime = {{2009,12,19},{18,55,10}},
 	"Sun, 20 Dec 2009 00:55:48 GMT" = Mod:expires_header(DateTime, 38).
 			
-make_etag_test() ->
-	Mod = handler_mod(),
-	"\"57PUN57VQTDZC1BCHRIRIMC7H\"" = Mod:make_etag({'Link', "Sample Link"}). 	
-	
 handler_mod() ->
 	Store = mock_store:new([]),
 	yarmo_web_handler:new(#request{context_root = "topics"}, Store).			

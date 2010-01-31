@@ -35,3 +35,6 @@ bin_replace_test() ->
 	Expected = <<"--123xxx123\r\nContent-Type: image/jpg\r\n\r\n230492304x0230942309x09213098234\r\n--123xxx123--">>,
 
 	Expected = ?TEST_MOD:bin_replace(?TEST_MOD:bin_replace(Body, <<"\\r">>, <<"\r">>), <<"\\n">>, <<"\n">>).
+
+make_etag_test() ->
+	"\"57PUN57VQTDZC1BCHRIRIMC7H\"" = ?TEST_MOD:etag({'Link', "Sample Link"}).

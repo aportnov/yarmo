@@ -4,9 +4,13 @@
 -export([handle/0]).
 
 %% Export for testing
--export([get_option/3, expires_header/2, make_etag/1]).
+-export([get_option/3, expires_header/2]).
 
 -include("yarmo.hrl").
+
+-define(ETAG(Term), yarmo_bin_util:etag(Term)).
+-define(MD5(Term), yarmo_bin_util:md5(Term, 36)).
+-define(LINK(Links), yarmo_link_util:link_header(Links)).
 
 %% Public API
 handle() ->
@@ -30,7 +34,7 @@ handle_get()	->
 		["messages" | Destination] ->
 			poe_request(lists:reverse(Destination), fun get_poe_url/2);	
 		["last", "poller" | Destination] ->
-			with_destination(lists:reverse(Destination), fun consume_message/1);			
+			with_destination(lists:reverse(Destination), fun last_message/1);			
 		["first", "poller" | Destination] ->
 			with_destination(lists:reverse(Destination), fun first_message/1);			
 		[BatchId, "batches" | Destination] ->
@@ -115,12 +119,12 @@ get_relationships(Relationships, #destination{name = DestName}) ->
 	end,	
 	Links = lists:foldr(Fun, [], Relationships),
 
-	LinkHeader = yarmo_link_util:link_header(Links),
+	LinkHeader = ?LINK(Links),
 	Headers = [
 	    LinkHeader,
 		{'Cache-Control', "public, max-age=\"86400\""},
 		{'Expires', expires_header(erlang:universaltime(), 86400)},
-		{'ETag', make_etag(LinkHeader)}
+		{'ETag', ?ETAG(LinkHeader)}
 	],
 	{200, Headers, []}.
 			
@@ -143,50 +147,62 @@ create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = H
 	CreateFun(Document).
 
 consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = Destination) ->
-	MessageUrlFun = location_url(Name),
-	
     MsgMod = yarmo_message:new(Store),
+
+	LinkFun = fun(P, Rel) -> #link{href= full_destination_url("http", Name, P), rel = [Rel]} end,	
+
+	ResponseFun = fun(#message{id = MsgId, consumed_timestamp = Timestamp, headers = Headers} = Message) ->
+		case AckMode of
+			"single" ->
+				ETag = ?MD5({consumed_timestamp, Timestamp}),
+				Path = string:join(["messages", MsgId, "acknowledgement;etag=" ++ ETag], "/"),
+				
+				{200, [?LINK([LinkFun(Path, "acknowledgement")]) | Headers], Message#message.body};
+			_  ->
+				spawn(fun() -> catch MsgMod:acknowledge(Message) end),
+				{200, Headers, Message#message.body}					
+		end				
+	end,
+	
 	case MsgMod:consume(Destination) of
 	  not_found -> 
 		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};			
 	  {error, Error} -> 
 		{400, [], yarmo_bin_util:thing_to_bin(Error)};				
-	  #message{id = MsgId, consumed_timestamp = Timestamp} = Message ->		
-		Headers = [{'Content-Location', MessageUrlFun(message, MsgId)} | Message#message.headers],
-		
-		case AckMode of
-			"single" ->
-				ETag = yarmo_bin_util:md5({consumed_timestamp, Timestamp}, 36),
-				Path = string:join(["messages", MsgId, "acknowledgement;etag=" ++ ETag], "/"),
-				
-				AckLink = #link{href = full_destination_url("http", Name, Path), rel = ["acknowledgement"]},
+	  #message{} = Message -> 
+		Msg = add_content_location(Destination, Message),
+		ResponseFun(Msg)		
+	end.	
 
-				{200, [yarmo_link_util:link_header([AckLink]) | Headers], Message#message.body};
-			_  ->
-				spawn(fun() -> catch MsgMod:acknowledge(Message) end),
-				{200, Headers, Message#message.body}					
-		end				
-	end;	
-consume_message(#destination{name = Name, type = "topic"} = Destination) ->
-	MessageUrlFun = location_url(Name),
-	
-	LinkFun = fun(Path, Rel) -> #link{href= full_destination_url("http", Name, Path), rel = [Rel]} end,	
-	
-    MsgMod = yarmo_message:new(Store),
-	case MsgMod:consume(Destination) of
-	  not_found -> 
-		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};			
-	  #message{id = MsgId, created_timestamp = Timestamp} = Message ->		
-		Headers = [{'Content-Location', MessageUrlFun(message, MsgId)} | Message#message.headers],
+retrieve_message(#destination{name = Name, type = "topic"} = Destination, RetrieveFun) ->
+	LinkFun = fun(P, Rel) -> #link{href= full_destination_url("http", Name, P), rel = [Rel]} end,	
 
-		ETag = yarmo_bin_util:md5({created_timestamp, Timestamp}, 36),
+	ResponseFun = fun(#message{created_timestamp = Timestamp, headers = Headers} = Message) ->
+		ETag = ?MD5({created_timestamp, Timestamp}),
 		Path = string:join(["poller", "next", ETag], "/"),
 
-		{200, [yarmo_link_util:link_header([LinkFun([], "generator"), LinkFun(Path, "next")]) | Headers], Message#message.body}
-	end.
+		{200, [?LINK([LinkFun([], "generator"), LinkFun(Path, "next")]) | Headers], Message#message.body}
+	end,	
+	case RetrieveFun() of
+	  not_found -> 
+		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};			
+	  #message{} = Message -> 
+		Msg = add_content_location(Destination, Message),
+		ResponseFun(Msg)		
+	end.	
 
-first_message(#destination{name = Name, type = "topic"} = Destination) ->
-	[].
+add_content_location(#destination{name = Name}, #message{id = Id} = Msg) ->
+	MessageUrlFun = location_url(Name),
+	Headers = [{'Content-Location', MessageUrlFun(message, Id)} | Msg#message.headers],
+	Msg#message{headers = Headers}.			
+			
+last_message(#destination{type = "topic"} = Destination) ->
+    MsgMod = yarmo_message:new(Store),
+	retrieve_message(Destination, fun() -> MsgMod:consume(Destination) end).
+
+first_message(#destination{type = "topic"} = Destination) ->
+    MsgMod = yarmo_message:new(Store),
+	retrieve_message(Destination, fun() -> MsgMod:first_message(Destination) end).
 
 acknowledge_message(MessageId, ETag) ->
     MsgMod = yarmo_message:new(Store),
@@ -197,7 +213,7 @@ acknowledge_message(MessageId, ETag) ->
 			case MsgMod:find(MessageId) of
 			  not_found -> {404, [], <<"Not Found.">>};
 			  #message{consumed_timestamp = Timestamp} = Message ->
-				case yarmo_bin_util:md5({consumed_timestamp, Timestamp}, 36) of
+				case ?MD5({consumed_timestamp, Timestamp}) of
 					ETag when Ack =:= "true" ->
 				  		spawn(fun() -> catch MsgMod:acknowledge(Message) end),
 						{204, [], []};
@@ -355,6 +371,3 @@ expires_header(DateTime, TtlSeconds) ->
 	Sec = calendar:datetime_to_gregorian_seconds(DateTime),
 	ExpireDatetime = calendar:gregorian_seconds_to_datetime(Sec + TtlSeconds),
 	httpd_util:rfc1123_date(ExpireDatetime).
-
-make_etag(Term) ->
-	yarmo_bin_util:etag(Term).

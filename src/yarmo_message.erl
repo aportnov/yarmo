@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/1, update/1, find/1, consume/1, acknowledge/1]).
+-export([create/1, update/1, find/1, consume/1, acknowledge/1, first_message/1]).
 -export([create_batch/1, find_batch/1]).
 -export([create_poe_message/2, update_poe_message/2]).
 
@@ -97,6 +97,12 @@ consume(#destination{id = Id}, Callback) ->
 	case undelivered({{id, Id}, {timestamp, ?timestamp()}}, descending, 1) of
 		[] -> not_found;
 		[Message | _] -> Callback(doc2message(Message))
+	end.	
+	
+first_message(#destination{id = Id, type = "topic"}) ->
+	case undelivered({{id, Id}, {timestamp, 0}}, ascending, 1) of
+		[] -> not_found;
+		[Message | _] -> doc2message(Message)
 	end.	
 
 acknowledge(#message{id = Id}) ->
