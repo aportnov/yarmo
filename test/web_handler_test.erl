@@ -164,7 +164,8 @@ consume_bad_rev_test() ->
 
 consume_message_from_topic_test_() ->
 	Request = #request{context_root = "topics", method = 'GET', params = [], headers = [{'Host', "www.some.com"}]},
-		
+
+    Timestamp = ?timestamp(),
 	ViewFun = fun(["message", "undelivered", _]) ->
 		Msg = [
 			{?l2b("_id"), ?l2b("message-id")},
@@ -173,7 +174,7 @@ consume_message_from_topic_test_() ->
 			{?l2b("destination"), ?l2b("topic:existing.topic") },
 			{?l2b("max_ttl"), 222 },
 			{?l2b("body"), <<"Sample Body">> },
-			{?l2b("created_timestamp"), ?timestamp()}
+			{?l2b("created_timestamp"), Timestamp}
 		],
 		[Msg]
 	end,
@@ -183,7 +184,8 @@ consume_message_from_topic_test_() ->
 			#link{href = "http://www.some.com/topics/existing/topic", rel = ["generator"]},
 			#link{href = NextLink, rel = ["next"]}
 		] = split_link(LinkHeader),
-		[_Tag, "next" | _BaseUrl] = lists:reverse(string:tokens(NextLink, "/:"))		
+		[Tag, "next" | _BaseUrl] = lists:reverse(string:tokens(NextLink, "/:")),
+		{"message-id", Timestamp} = yarmo_bin_util:decode(Tag)		
 	end,
 	
 	Assert = fun(#request{} = Req) ->

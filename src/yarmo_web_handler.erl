@@ -10,6 +10,9 @@
 
 -define(ETAG(Term), yarmo_bin_util:etag(Term)).
 -define(MD5(Term), yarmo_bin_util:md5(Term, 36)).
+-define(ENCODE(Term), yarmo_bin_util:encode(Term)).
+-define(DECODE(Data), yarmo_bin_util:decode(Data)).
+
 -define(LINK(Links), yarmo_link_util:link_header(Links)).
 
 %% Public API
@@ -177,8 +180,8 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 retrieve_message(#destination{name = Name, type = "topic"} = Destination, RetrieveFun) ->
 	LinkFun = fun(P, Rel) -> #link{href= full_destination_url("http", Name, P), rel = [Rel]} end,	
 
-	ResponseFun = fun(#message{created_timestamp = Timestamp, headers = Headers} = Message) ->
-		ETag = ?MD5({created_timestamp, Timestamp}),
+	ResponseFun = fun(#message{id = Id, created_timestamp = Timestamp, headers = Headers} = Message) ->
+		ETag = ?ENCODE({Id, Timestamp}),
 		Path = string:join(["poller", "next", ETag], "/"),
 
 		{200, [?LINK([LinkFun([], "generator"), LinkFun(Path, "next")]) | Headers], Message#message.body}

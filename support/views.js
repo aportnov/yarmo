@@ -3,7 +3,7 @@ message = {
 	"language": "javascript",
 	"views": {
 		"undelivered": {
-			"map" : "function(doc) {\n if (doc.type == 'message' && !doc.consumed_timestamp) {\nemit([doc.destination, doc.created_timestamp], doc);\n}\n}"
+			"map" : "function(doc) {\n if (doc.type == 'message' && !doc.consumed_timestamp) {\nemit([doc.destination, doc.created_timestamp, doc._id], doc);\n}\n}"
 		}
 	
 	}

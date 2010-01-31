@@ -3,7 +3,7 @@
 
 -include("yarmo.hrl").
 
--export([create/1, update/1, find/1, consume/1, acknowledge/1, first_message/1]).
+-export([create/1, update/1, find/1, consume/1, acknowledge/1, first_message/1, next_message/2]).
 -export([create_batch/1, find_batch/1]).
 -export([create_poe_message/2, update_poe_message/2]).
 
@@ -94,16 +94,31 @@ consume(#destination{type = "topic"} = Destination) ->
 	consume(Destination, fun(#message{} = M) -> M end).
 	
 consume(#destination{id = Id}, Callback) ->
-	case undelivered({{id, Id}, {timestamp, ?timestamp()}}, descending, 1) of
+	case undelivered(Id, [?timestamp()], descending, 1) of
 		[] -> not_found;
 		[Message | _] -> Callback(doc2message(Message))
 	end.	
 	
 first_message(#destination{id = Id, type = "topic"}) ->
-	case undelivered({{id, Id}, {timestamp, 0}}, ascending, 1) of
+	case undelivered(Id, [0], ascending, 1) of
 		[] -> not_found;
 		[Message | _] -> doc2message(Message)
 	end.	
+
+next_message(#destination{id = Id, type = "topic"}, {MsgId, Timestamp}) ->
+	case undelivered(Id, [Timestamp, MsgId], ascending, 2) of
+		[] -> not_found;
+		Messages ->
+			Pred = fun(Doc, Acc) ->
+				M = doc2message(Doc),
+				case M#message.id of
+					MsgId -> Acc;
+					_     -> [M | Acc]
+				end
+			end,		
+			[Message | _] = lists:foldr(Pred, [], Messages),
+			Message
+	end.		
 
 acknowledge(#message{id = Id}) ->
 	case find(Id) of
@@ -119,24 +134,20 @@ acknowledge(#message{id = Id}) ->
 	end.	
 	
 %% Private API	
-undelivered({{id, Id}, {timestamp, TimeStamp}}, Order, Limit) ->
-	Key = fun(T) -> ( [$[, $"] ++ Id ++ [$", $,, 32] ++ integer_to_list(T) ++ [$]] ) end,
-	
+
+undelivered(DestId, Key, Order, Limit) ->
+	KeyFun = fun([Timestamp]) ->
+					[$[, $"] ++ DestId ++ [$", $,, 32] ++ integer_to_list(Timestamp) ++ [$]];
+				([Timestamp, MsgId]) ->
+					[$[, $"] ++ DestId ++ [$", $,, 32] ++ integer_to_list(Timestamp) ++ [$,, 32, $"] ++ MsgId ++ [$", $]]	
+             end,
 	Options = case Order of
 		ascending  ->
-			[{limit, Limit}, {startkey, Key(TimeStamp)}, {endkey, Key(?timestamp())}];
+			[{limit, Limit}, {startkey, KeyFun(Key)}, {endkey, KeyFun([?timestamp()])}];
 		descending ->	
-			[{limit, Limit}, {descending, true}, {startkey, Key(TimeStamp)}, {endkey, Key(0)}]
-	end,	
-
-	case Store:view("message", "undelivered", Options) of
-		[]       -> [];
-		Messages ->
-			case Order of
-				ascending -> lists:reverse(Messages);
-				_         -> Messages
-			end	
-	end.		
+			[{limit, Limit}, {descending, true}, {startkey, KeyFun(Key)}, {endkey, KeyFun([0])}]
+  	end,	
+	Store:view("message", "undelivered", Options).				
 	
 doc2message(Doc) ->
 	BinFun = fun yarmo_bin_util:bin_to_list/1,	

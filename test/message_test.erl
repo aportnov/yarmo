@@ -229,6 +229,40 @@ consume_retry_test() ->
 		created_timestamp = 77777
 	} = Mod:consume(#destination{id = "queue:sample.queue", type = "queue"}).
 
+next_topic_message_test_() ->
+	Documents = [
+	 [{<<"_id">>,<<"49b80429ed1688919e5cc9f274956b97">>},
+	  {<<"_rev">>,<<"1-d9a1f58de407d6f777d43ca6333442ca">>},
+	  {<<"type">>,<<"message">>},
+	  {<<"destination">>,<<"topic:erlang.rest.sample.maxttl5">>},
+	  {<<"max_ttl">>,1800},
+	  {<<"body">>, <<>>},	
+	  {<<"created_timestamp">>,63428067413}],
+	 [{<<"_id">>,<<"6dfe8673604fc790f39bad41766b3e71">>},
+	  {<<"_rev">>,<<"1-12d89ede0f16470746def1284f910619">>},
+	  {<<"type">>,<<"message">>},
+	  {<<"destination">>,<<"topic:erlang.rest.sample.maxttl5">>},
+	  {<<"max_ttl">>,1800},
+	  {<<"headers">>,
+	   [{struct,[{<<"name">>,<<"Content-Type">>},
+	             {<<"value">>,<<"image/jpg">>}]}]},
+	  {<<"body">>,<<"230492304x0230942309x09213098234">>},
+	  {<<"created_timestamp">>,63428067413}]
+	],
+	
+	Mod = test_mod([{view, Documents}]),
+	Assert = fun(ExpectedId, RequestedKey) ->
+		fun() ->
+			#message{id = Id} = Mod:next_message(#destination{id = "topic:erlang.rest.sample.maxttl5", type="topic"}, RequestedKey),
+			?assertEqual(ExpectedId, Id)
+		end
+	end,
+	[
+		Assert("6dfe8673604fc790f39bad41766b3e71", {"49b80429ed1688919e5cc9f274956b97", 63428067413}),
+		Assert("49b80429ed1688919e5cc9f274956b97", {"deleted-id", 63428067413})
+	].		
+	
+
 acknowledge_message_test_() ->
 	Document = [
 		{<<"_id">>, <<"message-id">>},

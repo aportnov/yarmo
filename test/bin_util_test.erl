@@ -38,3 +38,7 @@ bin_replace_test() ->
 
 make_etag_test() ->
 	"\"57PUN57VQTDZC1BCHRIRIMC7H\"" = ?TEST_MOD:etag({'Link', "Sample Link"}).
+	
+encoding_test() ->
+	Term = {63427358359,"a2537d7d375f0f3fbbde055e8c19a4dc"},
+	Term = ?TEST_MOD:decode(?TEST_MOD:encode(Term)).	

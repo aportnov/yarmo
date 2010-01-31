@@ -1,7 +1,9 @@
 -module(yarmo_bin_util).
 -author('author <alex.portnov@gmail.com>').
 
--export([bin_replace/3, bin_split/2, bin_find/2, bin_to_list/1, thing_to_bin/1, md5/2, etag/1]).
+-export([bin_replace/3, bin_split/2, bin_find/2]).
+-export([bin_to_list/1, thing_to_bin/1]).
+-export([md5/2, etag/1, encode/1, decode/1]).
 
 bin_replace(Bin, From, To) -> 
     bin_replace(Bin, erlang:byte_size(From), Bin, From, To, 0). 
@@ -91,3 +93,10 @@ md5(Term, Base) ->
 
 etag(Term) ->
 	"\"" ++ md5(Term, 36)  ++ "\"".	
+	
+encode(Term) ->
+	base64:encode_to_string(term_to_binary(Term)).
+
+decode(Data) ->
+	binary_to_term(base64:decode(Data)).	
+		
