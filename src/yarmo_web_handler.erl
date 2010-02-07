@@ -182,18 +182,28 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 retrieve_message(#destination{name = Name, type = "topic"} = Destination, RetrieveFun) ->
 	LinkFun = fun(P, Rel) -> #link{href= full_destination_url("http", Name, P), rel = [Rel]} end,	
 
-	ResponseFun = fun(#message{id = Id, created_timestamp = Timestamp, headers = Headers} = Message) ->
-		ETag = ?ENCODE({Id, Timestamp}),
-		Path = string:join(["poller", "next", ETag], "/"),
-
-		{200, [?LINK([LinkFun([], "generator"), LinkFun(Path, "next")]) | Headers], Message#message.body}
+	RetrieveMsgFun = case get_option('Accept-Wait', none, Request#request.headers) of
+		none  -> RetrieveFun;
+		Value ->
+			fun() -> 
+				case RetrieveFun() of
+					not_found ->
+						Timeout = lists:min([5, list_to_integer(Value)]),
+						timer:sleep(Timeout * 1000),
+						RetrieveFun();
+					Any -> Any	
+				end	
+			end	
 	end,	
-	case RetrieveFun() of
+		
+	case RetrieveMsgFun() of
 	  not_found -> 
 		{503, [{'Retry-After', "5"}], <<"Service Unavailable">>};			
-	  #message{} = Message -> 
-		Msg = add_content_location(Destination, Message),
-		ResponseFun(Msg)		
+	  #message{id = Id, created_timestamp = Timestamp} = Message -> 
+		#message{headers = Headers} = add_content_location(Destination, Message),
+		Path = string:join(["poller", "next", ?ENCODE({Id, Timestamp})], "/"),
+
+		{200, [?LINK([LinkFun([], "generator"), LinkFun(Path, "next")]) | Headers], Message#message.body}
 	end.	
 
 add_content_location(#destination{name = Name}, #message{id = Id} = Msg) ->

@@ -229,6 +229,39 @@ consume_from_topic_no_message_test_() ->
 		Assert(Request#request{path = ["existing", "topic", "poller", "next", "g2gCawANcHJpb3ItbWVzc2FnZW4FAK6K4sQO"]}, []),
 		Assert(Request#request{path = ["existing", "topic", "poller", "next", yarmo_bin_util:encode({"message-id", Timestamp})]}, [Msg])
 	].		
+
+consume_from_topic_with_retry_test_() ->
+	Request = #request{context_root = "topics", method = 'GET', params = [], headers = [{'Host', "www.some.com"}, {'Accept-Wait', "1"}]},
+    Timestamp = ?timestamp(),
+	Msg = [
+		{?l2b("_id"), ?l2b("message-id")},
+		{?l2b("_rev"), ?l2b("oldRev")},
+		{?l2b("type"), ?l2b("message")},
+		{?l2b("destination"), ?l2b("topic:existing.topic") },
+		{?l2b("max_ttl"), 222 },
+		{?l2b("body"), <<"Sample Body">> },
+		{?l2b("created_timestamp"), Timestamp}
+	],
+	
+	ViewFun = fun(["message", "undelivered", _]) ->
+		case erlang:get(attempt) of 
+			undefined -> erlang:put(attempt, 1), [];
+			_         -> erlang:put(attempt, undefined), [Msg]
+		end
+	end,	
+	Assert = fun(#request{} = Req) ->
+		MockStore = [{read, mock_dest()}, {view, ViewFun}],
+		fun() ->
+			{200, Headers, "Sample Body" } = execute(MockStore, Req),
+			[{'Link', _}, {'Content-Location', _}] = Headers
+	    end
+	end,	
+	[
+		Assert(Request#request{path = ["existing", "topic", "poller", "last"]}),
+		Assert(Request#request{path = ["existing", "topic", "poller", "first"]}),
+		Assert(Request#request{path = ["existing", "topic", "poller", "next", "g2gCawANcHJpb3ItbWVzc2FnZW4FAK6K4sQO"]})
+	].
+	
 	
 acknowledge_message_test_() ->
 	Request = #request{context_root = "queues", method = 'POST', 
