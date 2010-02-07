@@ -116,8 +116,10 @@ next_message(#destination{id = Id, type = "topic"}, {MsgId, Timestamp}) ->
 					_     -> [M | Acc]
 				end
 			end,		
-			[Message | _] = lists:foldr(Pred, [], Messages),
-			Message
+			case lists:foldr(Pred, [], Messages) of
+				[] -> not_found;
+				[Message | _] -> Message	
+			end	
 	end.		
 
 acknowledge(#message{id = Id}) ->
