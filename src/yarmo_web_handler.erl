@@ -39,7 +39,9 @@ handle_get()	->
 		["last", "poller" | Destination] ->
 			with_destination(lists:reverse(Destination), fun last_message/1);			
 		["first", "poller" | Destination] ->
-			with_destination(lists:reverse(Destination), fun first_message/1);			
+			with_destination(lists:reverse(Destination), fun first_message/1);	
+		[Bookmark, "next", "poller" | Destination] ->
+			with_destination(lists:reverse(Destination), fun(D) -> next_message(D, Bookmark) end);				
 		[BatchId, "batches" | Destination] ->
 			get_batch(lists:reverse(Destination), BatchId);	
 		[] ->
@@ -206,6 +208,10 @@ last_message(#destination{type = "topic"} = Destination) ->
 first_message(#destination{type = "topic"} = Destination) ->
     MsgMod = yarmo_message:new(Store),
 	retrieve_message(Destination, fun() -> MsgMod:first_message(Destination) end).
+
+next_message(#destination{type = "topic"} = Destination, Bookmark) ->	
+	MsgMod = yarmo_message:new(Store),
+	retrieve_message(Destination, fun() -> MsgMod:next_message(Destination, ?DECODE(Bookmark)) end).
 
 acknowledge_message(MessageId, ETag) ->
     MsgMod = yarmo_message:new(Store),

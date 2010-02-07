@@ -12,6 +12,13 @@ header_conversion_test() ->
 	Mod = test_mod(),
  	JsonHeaders = Mod:headers2json(Headers),
 	Headers     = Mod:json2headers(JsonHeaders).
+
+none_binary_header_conversion_test() ->
+	Headers = [{'Host', "www.sample.com"}, {'X-Powered-By', "Erlang"}],
+	JsonHeaders = [{struct,[{name, "Host"}, {value, "www.sample.com"}]}, {struct, [{name, <<"X-Powered-By">>}, {value, <<"Erlang">>}]}],
+	
+	Mod = test_mod(),
+	Headers = Mod:json2headers(JsonHeaders).
 	
 message_to_doc_test_() ->
 	Mod = test_mod(),

@@ -198,7 +198,8 @@ consume_message_from_topic_test_() ->
 	end,	
 	[
 		Assert(Request#request{path = ["existing", "topic", "poller", "last"]}),
-		Assert(Request#request{path = ["existing", "topic", "poller", "first"]})
+		Assert(Request#request{path = ["existing", "topic", "poller", "first"]}),
+		Assert(Request#request{path = ["existing", "topic", "poller", "next", "g2gCawANcHJpb3ItbWVzc2FnZW4FAK6K4sQO"]})
 	].
 	
 acknowledge_message_test_() ->
