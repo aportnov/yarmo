@@ -41,14 +41,35 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
+    Processes = [web_process(), background_process()],
+    {ok, {{one_for_one, 10, 10}, Processes}}.
+
+%% Private API
+
+web_process() ->
     Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,   
-    WebConfig = [
+    Config = [
     	{ip, Ip},
         {port, 8000},
         {docroot, yarmo_deps:local_path(["priv", "www"])}
     ],
-    Web = {yarmo_web,
-           {yarmo_web, start, [WebConfig]},
-           permanent, 5000, worker, dynamic},
-    Processes = [Web],
-    {ok, {{one_for_one, 10, 10}, Processes}}.
+    {yarmo_web,
+           {yarmo_web, start, [Config]},
+           permanent, 5000, worker, dynamic}.
+
+background_process() ->
+	Store = yarmo_store,	
+	Config = [
+		{destinations, fun() -> 
+			Mod = yarmo_destination:new(Store),
+			Mod:find_all() 
+		end},
+		{expire_messages, fun(Destination) ->
+			Mod = yarmo_message:new(Store),
+			Mod:remove_expired(Destination)
+		end},
+		{interval, timer:seconds(30)}
+	],
+	{yarmo_tasks,
+		{yarmo_tasks, start, [Config]},
+		permanent, 5000, worker, dynamic}.

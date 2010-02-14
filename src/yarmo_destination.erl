@@ -3,13 +3,16 @@
 
 -include("yarmo.hrl").
 
--export([find/1, create/1, generate_key/2]).
+-export([find/1, find_all/0, create/1, generate_key/2]).
 
 find(#destination{type = Type, name = Name}) ->
 	case Store:read(generate_key(Type, Name)) of
 		not_found -> not_found;
 		Doc -> doc2dest(Doc)
 	end.	
+	
+find_all() ->
+	lists:map(fun(Doc) -> doc2dest(Doc) end, Store:view("destination", "all")).	
 
 create(#destination{type = Type, name = Name} = Destination) ->
 	Document = [
@@ -17,7 +20,7 @@ create(#destination{type = Type, name = Name} = Destination) ->
 		{?l2b("name"), ?l2b(string:join(Name, "."))},
 		{?l2b("max_ttl"), Destination#destination.max_ttl},
 		{?l2b("reply_time"), Destination#destination.reply_time},
-		{?l2b("ack_mode"), Destination#destination.ack_mode},
+		{?l2b("ack_mode"), ?l2b(Destination#destination.ack_mode)},
 		{?l2b("created_timestamp"), ?timestamp()}
 	],
 	Key = generate_key(Type, Name),

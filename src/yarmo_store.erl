@@ -5,13 +5,15 @@
 
 -include("yarmo.hrl").
 
--export([read/1, create/1, create/2, update/3, get_value/2, view/3, view/2]).
+-export([read/1, create/1, create/2, delete/2, bulk_delete/1, update/3, get_value/2, view/3, view/2]).
 
--define(DB_READ(Key), couchdb:retrieve_document(?DATABASE_NAME, Key)).
--define(DB_CREATE_ID(Key, Document), couchdb:create_document(?DATABASE_NAME, {Key, Document})).
--define(DB_CREATE(Document), couchdb:create_document(?DATABASE_NAME, Document)).
--define(DB_VIEW(DocName, ViewName, Options), couchdb:invoke_view(?DATABASE_NAME, DocName, ViewName, Options)).
--define(DB_REPLACE(Key, Rev, Document), couchdb:replace_document(?DATABASE_NAME, Key, Rev, Document)).
+-define(DB_READ(Key), couchdb:retrieve_document(?DB_HOST, ?DATABASE_NAME, Key)).
+-define(DB_CREATE_ID(Key, Document), couchdb:create_document(?DB_HOST,?DATABASE_NAME, {Key, Document})).
+-define(DB_CREATE(Document), couchdb:create_document(?DB_HOST, ?DATABASE_NAME, Document)).
+-define(DB_VIEW(DocName, ViewName, Options), couchdb:invoke_view(?DB_HOST, ?DATABASE_NAME, DocName, ViewName, Options)).
+-define(DB_REPLACE(Key, Rev, Document), couchdb:replace_document(?DB_HOST, ?DATABASE_NAME, Key, Rev, Document)).
+-define(DB_DELETE(Key, Rev), couchdb:delete_document(?DB_HOST, ?DATABASE_NAME, Key, Rev)).
+-define(DB_DELETE_BULK(L), erlang_couchdb:delete_documents(?DB_HOST, ?DATABASE_NAME, L)).
 
 read(Key) ->
 	case ?DB_READ(Key) of
@@ -43,6 +45,26 @@ update(Key, OldRev, Document) ->
 	               	     {<<"rev">>, Rev}]}} -> {{id, Id}, {rev, Rev}}
 	end.	
 
+delete(Key, Rev) ->
+	case ?DB_DELETE(Key, Rev) of
+		{json, {struct, [{<<"error">>,<<"conflict">>} | _]} }  -> {error, refetch};
+		{json, {struct, [{<<"error">>,<<"not_found">>} | _]} } -> {ok, not_found};
+		{json, {struct, [{<<"error">>, Error} | _]} }          -> {error, ?b2a(Error)};
+		{json, {struct, [{<<"ok">>,true} | _]} }               -> {ok, deleted}
+	end.
+
+bulk_delete(Documents) ->
+	F = fun yarmo_bin_util:thing_to_bin/1, 
+	
+	{json, Results} = ?DB_DELETE_BULK([{F(Id), F(Rev)} || {Id, Rev} <- Documents]),
+	Pred = fun({struct, Attributes}) ->
+		case Attributes of
+			[{<<"id">>, Id}, {<<"error">>, Error} | _] -> {error, ?b2l(Id), ?b2a(Error)};
+			[{<<"id">>, Id}, {<<"rev">>, _Rev} | _]    -> {ok, ?b2l(Id)}
+		end	
+	end,
+	lists:map(Pred, Results).
+
 view(DocName, ViewName) ->
 	view(DocName, ViewName, []).
 
@@ -51,7 +73,9 @@ view(DocName, ViewName, Options) ->
 	               {<<"offset">>, _},
 	               {<<"rows">>, Results}]} } = ?DB_VIEW(DocName, ViewName, Options),
 	
-	[M || {struct, [_, _, {<<"value">>, {struct, M} }] } <- Results].
+	lists:map(fun({struct, [_, _, {<<"value">>, Value }] }) -> 
+		case Value of {struct, M} -> M; Any -> Any end	
+	end, Results).
 
 get_value(Document, Name) ->	
 	case lists:keysearch(?l2b(Name), 1, Document) of

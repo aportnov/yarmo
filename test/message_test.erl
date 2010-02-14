@@ -294,6 +294,34 @@ acknowledge_message_test_() ->
 		 		{update, {{id, <<"message-id">>}, {rev, {bad_request, bad_request}}}}])
 	].		
 
+remove_expired_messages_test() ->
+	Documents = [
+		[{<<"_id">>, <<"message-1">>},
+		{<<"_rev">>, <<"rev-1">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"body">>, <<"Sample Message Body">>},
+		{<<"created_timestamp">>, 77777}],
+
+		[{<<"_id">>, <<"message-2">>},
+		{<<"_rev">>, <<"rev-2">>},
+		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"body">>, <<"Sample Message Body">>},
+		{<<"created_timestamp">>, 77777}]
+		
+	],	
+	
+	ViewFun = fun(["message", "all", Options]) -> 
+		?assertMatch([{limit, 100}, {startkey, _}, {endkey, _}], Options),
+		Documents 
+	end,
+	DeleteFun = fun([ Docs ]) ->
+		?assertEqual([{<<"message-1">>, <<"rev-1">>}, {<<"message-2">>, <<"rev-2">>}], Docs),
+		[] 
+	end,
+	
+	Mod = test_mod([{view, ViewFun}, {bulk_delete, DeleteFun}]),
+	Mod:remove_expired(#destination{id = "queue:some.queue", max_ttl = 18000}).
+
 test_mod() ->
 	test_mod([]).
 

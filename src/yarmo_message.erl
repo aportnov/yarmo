@@ -6,6 +6,7 @@
 -export([create/1, update/1, find/1, consume/1, acknowledge/1, first_message/1, next_message/2]).
 -export([create_batch/1, find_batch/1]).
 -export([create_poe_message/2, update_poe_message/2]).
+-export([remove_expired/1]).
 
 %% For testing
 -export([headers2json/1, json2headers/1, message2doc/1, doc2message/1]).
@@ -134,22 +135,35 @@ acknowledge(#message{id = Id}) ->
 		    end; 
 		#message{rev = Rev} -> {acknowledged, Rev}
 	end.	
+
+remove_expired(#destination{} = Destination) ->
+	Fun = fun(Doc, Name) -> Store:get_value(Doc, Name) end,
+	Documents = [{Fun(Doc, "_id"), Fun(Doc, "_rev")} || Doc <- expired(Destination, 100)],
+	Store:bulk_delete(Documents).
 	
 %% Private API	
 
 undelivered(DestId, Key, Order, Limit) ->
-	KeyFun = fun([Timestamp]) ->
-					[$[, $"] ++ DestId ++ [$", $,, 32] ++ integer_to_list(Timestamp) ++ [$]];
-				([Timestamp, MsgId]) ->
-					[$[, $"] ++ DestId ++ [$", $,, 32] ++ integer_to_list(Timestamp) ++ [$,, 32, $"] ++ MsgId ++ [$", $]]	
-             end,
+	KeyFun = view_key_fun(DestId),
 	Options = case Order of
 		ascending  ->
 			[{limit, Limit}, {startkey, KeyFun(Key)}, {endkey, KeyFun([?timestamp()])}];
 		descending ->	
 			[{limit, Limit}, {descending, true}, {startkey, KeyFun(Key)}, {endkey, KeyFun([0])}]
   	end,	
-	Store:view("message", "undelivered", Options).				
+	Store:view("message", "undelivered", Options).
+
+expired(#destination{id = DestId, max_ttl = MaxTTL}, Limit) ->
+	KeyFun = view_key_fun(DestId),
+	Options = [{limit, Limit}, {startkey, KeyFun([0])}, {endkey, KeyFun([?timestamp() - MaxTTL])}],
+	Store:view("message", "all", Options).
+	
+view_key_fun(DestId) ->
+	fun([Timestamp]) -> 
+			[$[, $"] ++ DestId ++ [$", $,, 32] ++ integer_to_list(Timestamp) ++ [$]];
+	   ([Timestamp, MsgId]) ->
+			[$[, $"] ++ DestId ++ [$", $,, 32] ++ integer_to_list(Timestamp) ++ [$,, 32, $"] ++ MsgId ++ [$", $]]	
+    end.						
 	
 doc2message(Doc) ->
 	BinFun = fun yarmo_bin_util:bin_to_list/1,	

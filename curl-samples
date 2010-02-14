@@ -11,3 +11,13 @@ curl -v -X GET http://localhost:8000/queues/erlang/rest/sample/messages/ad90fe5a
 
 curl -v -X HEAD http://localhost:8000/queues/erlang/rest/sample/messages
 curl -v -X HEAD http://localhost:8000/topics/erlang/rest/sample/messages
+
+# Create New Destination:
+
+curl -v -X PUT http://localhost:8000/queues/single/ack/sample -H "Message-Ack-Mode: single"
+curl -v -X PUT http://localhost:8000/topics/sample/topic 
+
+
+# Consume Queue Message:
+
+curl -v -X POST  http://localhost:8000/queues/single/ack/sample/poller

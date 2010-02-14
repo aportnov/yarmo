@@ -66,6 +66,28 @@ find_destination_test() ->
 		max_ttl = 300,
 		reply_time = 500
 	} = Mod:find(Dest).	
+	
+find_all_destinations_test() ->
+	Document = [
+		{<<"_id">>, ?l2b("queue:sample.queue.example")},
+		{?l2b("type"), ?l2b("queue")},
+		{?l2b("name"), ?l2b("sample.queue.example")},
+		{?l2b("max_ttl"), 300},
+		{?l2b("reply_time"), 500},
+		{?l2b("created_timestamp"), 111111}
+	],
+	
+	Mod = test_mod([{view, [Document]}]), 	
+	
+	[
+		#destination{
+			id = "queue:sample.queue.example",
+			type = "queue",
+			name = ["sample","queue", "example"],
+			max_ttl = 300,
+			reply_time = 500
+		}
+	] = Mod:find_all().	
 
 test_mod() ->
 	test_mod([]).

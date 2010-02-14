@@ -7,6 +7,9 @@
 -define(timestamp(), calendar:datetime_to_gregorian_seconds(erlang:universaltime())).
 
 -define(DATABASE_NAME, "erlymessage").
+-define(DB_HOSTNAME, "localhost").
+-define(DB_PORT, 5984).
+-define(DB_HOST, {?DB_HOSTNAME, ?DB_PORT}).
 
 -define(LOG(Msg, Data), io:format(Msg ++ " ~p~n", Data)).
 
