@@ -43,17 +43,23 @@ get_option(Option, Options) ->
 request_data(Req) ->
     "/" ++ Path = Req:get(path),
 	Method = Req:get(method),
-	Body = case Method of
-		M when M =:= 'POST'; M =:= 'PUT' ->
-			Req:recv_body();
-		_ -> []	
+	{Body, Params} = case Method of
+		M when M =:= 'POST'; M =:= 'PUT' -> 
+			Binary = Req:recv_body(),
+			case Req:get_primary_header_value("content-type") of
+                 "application/x-www-form-urlencoded" ++ _ ->
+                     {[], mochiweb_util:parse_qs(Binary)};
+                 _ ->
+                     {Binary, []}
+             end;
+		_ -> {[], Req:parse_qs()}
 	end,
 		
 	#request{
 		method = Method, 
 		path = string:tokens(Path, "/;"), 
 		peer = Req:get(peer),
-		params = Req:parse_qs(),
+		params = Params,
 		headers = mochiweb_headers:to_list(Req:get(headers)),
 		cookies = Req:parse_cookie(),
 		body = case Body of undefined -> <<>>; _ -> Body end

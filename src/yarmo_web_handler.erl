@@ -3,9 +3,6 @@
 
 -export([handle/0]).
 
-%% Export for testing
--export([get_option/3, expires_header/2]).
-
 -include("yarmo.hrl").
 
 -define(ETAG(Term), yarmo_bin_util:etag(Term)).
@@ -14,6 +11,7 @@
 -define(DECODE(Data), yarmo_bin_util:decode(Data)).
 
 -define(LINK(Links), yarmo_link_util:link_header(Links)).
+-define(OPTION(Name, Default, Options), yarmo_web_util:get_option(Name, Default, Options)).
 
 %% Public API
 handle() ->
@@ -128,7 +126,7 @@ get_relationships(Relationships, #destination{name = DestName}) ->
 	Headers = [
 	    LinkHeader,
 		{'Cache-Control', "public, max-age=\"86400\""},
-		{'Expires', expires_header(erlang:universaltime(), 86400)},
+		{'Expires', yarmo_web_util:expires(erlang:universaltime(), 86400)},
 		{'ETag', ?ETAG(LinkHeader)}
 	],
 	{200, Headers, []}.
@@ -147,7 +145,7 @@ create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = H
 		max_ttl     = MaxTtl, 
 		headers     = Headers,
 		body        = Body,
-		id          = get_option('message_id', generated, Params)
+		id          = ?OPTION('message_id', generated, Params)
 	}, 
 	CreateFun(Document).
 
@@ -182,7 +180,7 @@ consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = 
 retrieve_message(#destination{name = Name, type = "topic"} = Destination, RetrieveFun) ->
 	LinkFun = fun(P, Rel) -> #link{href= full_destination_url("http", Name, P), rel = [Rel]} end,	
 
-	RetrieveMsgFun = case get_option('Accept-Wait', none, Request#request.headers) of
+	RetrieveMsgFun = case ?OPTION('Accept-Wait', none, Request#request.headers) of
 		none  -> RetrieveFun;
 		Value ->
 			fun() -> 
@@ -226,7 +224,7 @@ next_message(#destination{type = "topic"} = Destination, Bookmark) ->
 acknowledge_message(MessageId, ETag) ->
     MsgMod = yarmo_message:new(Store),
 	
-	case get_option('acknowledgement', [], Request#request.params) of
+	case ?OPTION('acknowledgement', [], Request#request.params) of
 		[]  -> {400, [], <<"acknowledgement parameter is required">>};
 		Ack ->
 			case MsgMod:find(MessageId) of
@@ -283,7 +281,7 @@ post_batch(#destination{name = Name} = Destination) ->
 
 parse_batch_body() ->
 	#request{headers = Headers} = Request,
-	case get_option('Content-Type', unknown, Headers) of
+	case ?OPTION('Content-Type', unknown, Headers) of
 		unknown -> [];
 		[$m,$u,$l,$t,$i,$p,$a,$r,$t,$/ | _] -> yarmo_web_multipart:parse_multipart_request(Request);
 		"application/atom+xml" -> yarmo_web_atom:parse_atom_request(Request);
@@ -296,9 +294,9 @@ create_destination(#destination{} = Destination) ->
 	Header = fun(Name, Default) -> 
 		case Default of
 			D when is_integer(D) ->
-				list_to_integer(get_option(Name, integer_to_list(D), Request#request.headers));
+				list_to_integer(?OPTION(Name, integer_to_list(D), Request#request.headers));
 			L ->
-				get_option(Name, L, Request#request.headers)
+				?OPTION(Name, L, Request#request.headers)
 		end	
 	end,
 	
@@ -329,7 +327,7 @@ with_destination(Name, FoundCallback, NotFoundCallback) ->
 
 poe_request(Destination, Callback) ->
 	Fun = fun(D) ->
-		case get_option('POE', [], Request#request.headers) of
+		case ?OPTION('POE', [], Request#request.headers) of
 			[]  -> {400, [], <<"POE header is required">>};
 			POE -> Callback(D, POE)
 		end		
@@ -345,24 +343,6 @@ name_to_destination(Name) ->
 	end,
 	#destination{type = Type, name = Name}.
 	
-get_option(Name, Default, Options) ->
-	Fun = fun(Key, Res) ->
-		case lists:keysearch(Key, 1, Options) of
-			{value, {Key, Value}}  -> Value;
-			_ -> Res	
-		end
-	end,	
-	Convertion = if 
-		is_atom(Name)   -> atom_to_list; 
-		is_binary(Name) -> binary_to_list;
-		true -> list_to_atom 
-	end,
-	
-	case Fun(Name, not_found) of
-		not_found -> Fun(erlang:Convertion(Name), Default);
-		Value -> Value
-	end.	
-
 location_url(Destination) ->
 	fun(Type, Id) ->
 		Suffix = case Type of
@@ -381,12 +361,7 @@ full_destination_url(Scheme, DestName, Path) ->
 		[] -> destination_url(DestName);
 		_  -> destination_url(DestName) ++ "/" ++ Path
 	end,	
-	case get_option('Host', [], Request#request.headers) of
+	case ?OPTION('Host', [], Request#request.headers) of
 		[]   -> ReqPath;
 		Host -> Scheme ++ "://" ++ Host ++ ReqPath
 	end.			
-	
-expires_header(DateTime, TtlSeconds) ->
-	Sec = calendar:datetime_to_gregorian_seconds(DateTime),
-	ExpireDatetime = calendar:gregorian_seconds_to_datetime(Sec + TtlSeconds),
-	httpd_util:rfc1123_date(ExpireDatetime).

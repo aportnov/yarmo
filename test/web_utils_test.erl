@@ -5,16 +5,23 @@
 -include("../src/yarmo.hrl").
 
 get_header_test() ->
-	Mod = handler_mod(),
 	Headers = [{'Host', "www.sample.com"}, {'Cache-Control', "private max-age=20"}],
-	"www.sample.com" = Mod:get_option('Host', [], Headers),
-	"default" = Mod:get_option('Something', "default", Headers).
+	"www.sample.com" = yarmo_web_util:get_option('Host', [], Headers),
+	"default" = yarmo_web_util:get_option('Something', "default", Headers).
 	
 expires_header_test() ->
-	Mod = handler_mod(),
 	DateTime = {{2009,12,19},{18,55,10}},
-	"Sun, 20 Dec 2009 00:55:48 GMT" = Mod:expires_header(DateTime, 38).
-			
-handler_mod() ->
-	Store = mock_store:new([]),
-	yarmo_web_handler:new(#request{context_root = "topics"}, Store).			
+	"Sun, 20 Dec 2009 00:55:48 GMT" = yarmo_web_util:expires(DateTime, 38).
+
+normalize_key_test_() ->
+	[
+		?_assertEqual("host", yarmo_web_util:normalize_key("Host")),
+		?_assertEqual("host", yarmo_web_util:normalize_key('Host')),
+		?_assertEqual("host", yarmo_web_util:normalize_key(host)),
+		?_assertEqual("host", yarmo_web_util:normalize_key(<<"Host">>))
+	].
+
+normalize_list_test() ->
+	Headers  = [{'Host', "www.sample.com"}, {'Cache-Control', "private max-age=20"}],
+	Expected = [{"host", "www.sample.com"}, {"cache-control", "private max-age=20"}],
+	?assertEqual(Expected, yarmo_web_util:normalize(Headers)).			
