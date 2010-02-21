@@ -89,6 +89,31 @@ find_all_destinations_test() ->
 		}
 	] = Mod:find_all().	
 
+topic_subscribe_test_() ->
+	Mod = test_mod([{create, {{id, <<"sub-id">>}, {rev, <<"Rev">>}}}]),
+	Dest = #destination{type = "topic", name = ["sample", "topic", "example"], id = "topic:sample.topic.example"},
+	
+	Subscription = #subscription{
+		id = "sub-id", rev = "Rev", destination = "topic:sample.topic.example",
+		subscriber = "http://www.somesite.com/subscriber/333", poe = "false"
+	},
+	
+	Match = fun(#subscription{} = Source, #subscription{} = Target) ->
+		?assertEqual(Source#subscription.id, Target#subscription.id),
+		?assertEqual(Source#subscription.rev, Target#subscription.rev),
+		?assertEqual(Source#subscription.destination, Target#subscription.destination),
+		?assertEqual(Source#subscription.subscriber, Target#subscription.subscriber),
+		?assertEqual(Source#subscription.poe, Target#subscription.poe)
+	end,	
+	[
+    	fun() -> 
+			Match(Subscription, Mod:subscribe(Dest, "http://www.somesite.com/subscriber/333")) 
+		end,
+		fun() -> 
+			Match(Subscription#subscription{poe = "true"}, Mod:subscribe(Dest, "http://www.somesite.com/subscriber/333", "true")) 
+		end
+    ].
+
 test_mod() ->
 	test_mod([]).
 		

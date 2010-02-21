@@ -127,7 +127,7 @@ consume_message_from_queue_test_() ->
 	
     [
 		Assert("auto", fun(H) -> 
-			[{'Content-Location', "/queues/existing/queue/messages/message-id"}] = H 
+			[{'Content-Location', "http://www.some.com/queues/existing/queue/messages/message-id"}] = H 
 		end),
 		Assert("single", fun(H) -> 
 			[{'Link', Link}, {'Content-Location', _}] = H,
@@ -364,7 +364,24 @@ create_poe_message_test_() ->
 		Assert({400, [], <<"error">>}, MockStore({bad_request, error}), Request),
 		Assert({204, [], []}, MockStore(<<"NewRev">>), Request)
 	].	
+
+%% POST create subscription
+create_topic_subscription_test_() ->
+	Request = #request{context_root = "topics", method = 'POST',
+		path = ["existing", "topic", "subscribers"], params = [], headers = []
+	},
+	MockStore = [{read, mock_dest()}, {create, {{id, <<"sub-id">>}, {rev, <<"Rev">>}}}],
 	
+	Assert = fun(ExpectedResponse, Req) -> 
+		fun() -> ?assertEqual(ExpectedResponse, execute(MockStore, Req)) end
+	end,
+	
+	[
+		Assert({400, [], <<"subscriber param is required.">>}, Request),
+		Assert({201, [{'Location', "/topics/existing/topic/subscribers/sub-id"}], []},
+		 	Request#request{params = [{"subscriber", "http://some-url"}]})
+	].	
+		
 	
 %% Helper Functions
 split_link(LinkHeader) ->

@@ -20,6 +20,7 @@ ensure_started(App) ->
 start() ->
     yarmo_deps:ensure(),
     ensure_started(crypto),
+    ensure_started(ibrowse),
     application:start(yarmo).
 
 %% @spec stop() -> ok
@@ -27,4 +28,5 @@ start() ->
 stop() ->
     Res = application:stop(yarmo),
     application:stop(crypto),
+    application:stop(ibrowse),
     Res.

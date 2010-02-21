@@ -22,13 +22,15 @@ handle() ->
 			handle_post();
 		'PUT' ->
 			handle_put();	
+		'DELETE' ->
+			handle_delete();	
 		_ ->
 			{405, [], <<"Method Not Allowed.">>}
 	end.	
 
 %% Request Handlers
 
-handle_get()	->
+handle_get() ->
 	case lists:reverse(Request#request.path) of
 		[MessageId, "messages" | _Destination ] when length(_Destination) > 0 ->
 			get_message(MessageId);
@@ -59,6 +61,8 @@ handle_post() ->
 			with_destination(lists:reverse(Destination), fun post_batch/1);
 		["poller" | Destination] ->
 			with_destination(lists:reverse(Destination), fun consume_message/1);		
+		["subscribers" | Destination] when Request#request.context_root =:= "topics" ->
+			with_destination(lists:reverse(Destination), fun create_subscription/1);		
 		[AckTag, "acknowledgement", MessageId, "messages" | _Destination] when length(_Destination) > 0 ->
 			["etag", Tag] = string:tokens(AckTag, "="),
 		    acknowledge_message(MessageId, Tag);			
@@ -77,6 +81,9 @@ handle_put() ->
 			{501, [], <<"Not Implemented.">>}
 
 	end.	
+
+handle_delete() ->
+	{501, [], <<"Not Implemented.">>}.		
 	
 %% Private API Implementation
 get_message(MessageId) ->
@@ -101,7 +108,8 @@ get_relationships(#destination{type = "topic"} = Destination) ->
 		{{rel, "first"}, {path, "poller/first"}},
 		{{rel, "last"}, {path, "poller/last"}},
 		{{rel, "first-batch"}, {path, "poller/batches/first"}},
-		{{rel, "last-batch"}, {path, "poller/batches/last"}}
+		{{rel, "last-batch"}, {path, "poller/batches/last"}},
+		{{rel, "subscribers"}, {path, "subscribers"}}
 	],	
 	get_relationships(Relationships, Destination);
 	
@@ -312,6 +320,19 @@ create_destination(#destination{} = Destination) ->
 			{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
 			{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []}.
 
+%% Create a subscriber for PUSH delivery
+create_subscription(#destination{name = Name, type = "topic"} = Destination) ->
+	Mod = yarmo_destination:new(Store),
+	case ?OPTION('subscriber', undefined, Request#request.params) of
+		undefined  ->
+			{400, [], <<"subscriber param is required.">>};
+		Subscriber ->
+			POE = ?OPTION('POE', "false", Request#request.params),
+			#subscription{id = Id} = Mod:subscribe(Destination, Subscriber, POE),
+			UrlFun = location_url(Name),
+			{201, [{'Location', UrlFun(subscription, Id)}], []}
+	end.			
+
 %% Filters
 with_destination(Name, FoundCallback) ->
 	with_destination(Name, FoundCallback, fun(_D) -> {404, [], <<"Not Found.">>} end).
@@ -346,11 +367,12 @@ name_to_destination(Name) ->
 location_url(Destination) ->
 	fun(Type, Id) ->
 		Suffix = case Type of
-			message -> "/messages/";
-			batch   -> "/batches/";
-			_       -> "/"
+			message      -> "messages/";
+			batch        -> "batches/";
+			subscription -> "subscribers/";
+			_            -> ""
 		end,
-		destination_url(Destination) ++ Suffix ++ Id	
+		full_destination_url("http", Destination, Suffix ++ Id)	
 	end.	
 	
 destination_url(Destination) ->

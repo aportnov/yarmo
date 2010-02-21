@@ -22,6 +22,6 @@ normalize_key_test_() ->
 	].
 
 normalize_list_test() ->
-	Headers  = [{'Host', "www.sample.com"}, {'Cache-Control', "private max-age=20"}],
-	Expected = [{"host", "www.sample.com"}, {"cache-control", "private max-age=20"}],
+	Headers  = [{'Host', "www.sample.com"}, {'Cache-Control', "private max-age=20"}, {"subscriber", "http://some-url"}],
+	Expected = [{"host", "www.sample.com"}, {"cache-control", "private max-age=20"}, {"subscriber", "http://some-url"}],
 	?assertEqual(Expected, yarmo_web_util:normalize(Headers)).			

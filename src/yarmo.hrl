@@ -17,6 +17,8 @@
 
 -record(destination, {type = "queue", id, rev, name, max_ttl = 1800, reply_time = 60, ack_mode = "auto"}).
 
+-record(subscription, {destination, id, rev, subscriber, poe = "false", created_timestamp}).
+
 -record(message, {destination, id = generated, rev, max_ttl, headers = [], body, created_timestamp, consumed_timestamp, acknowledged_timestamp}).
 
 -record(batch, {destination, id, rev, max_ttl, body, created_timestamp}).
