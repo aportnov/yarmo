@@ -258,7 +258,6 @@ get_poe_url(#destination{name = Name} = Destination, POE) ->
 	Link = full_destination_url("http", Name, string:join(["messages", MsgId], "/")),
 	{200, [{'POE-Links', Link}], []}.
 
-%% TODO - add POE POST handler test
 post_poe_message(#destination{} = Destination, POE, MessageId) ->
 	MsgMod = yarmo_message:new(Store),
 

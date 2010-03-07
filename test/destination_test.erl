@@ -114,6 +114,51 @@ topic_subscribe_test_() ->
 		end
     ].
 
+topic_subscribers_test() ->
+	ViewFun = fun(["destination", "subscribers", [{key,"[\"topic:sample.topic\"]"}]]) -> 
+		[
+			[
+				{<<"_id">>, <<"sub-id">>},
+			 	{<<"_rev">>, <<"Rev">>},
+			 	{<<"destination">>, <<"topic:sample.topic">>},
+			 	{<<"subscriber">>, <<"http://some-url.com">>},
+				{<<"poe">>, <<"false">>}
+			]
+		]
+	end,
+	Mod = test_mod([{view, ViewFun}]),
+	[#subscription{
+		id = "sub-id", 
+		rev = "Rev", 
+		destination = "topic:sample.topic", 
+		subscriber = "http://some-url.com", 
+		poe = "false"
+	}] = Mod:subscribers(#destination{id = "topic:sample.topic"}).	
+
+deliver_message_topic_subscribers_test() ->
+	ViewFun = fun(["destination", "subscribers", [{key,"[\"topic:sample.topic\"]"}]]) -> 
+		[
+			[
+				{<<"_id">>, <<"sub-id">>},
+			 	{<<"_rev">>, <<"Rev">>},
+			 	{<<"destination">>, <<"topic:sample.topic">>},
+			 	{<<"subscriber">>, <<"http://some-url.com">>},
+				{<<"poe">>, <<"false">>}
+			]
+		]
+	end,
+	Mod = test_mod([{view, ViewFun}]),
+	
+	Message = #message{headers = [{'hello', "hello"}], body = "sample", destination = "topic:sample.topic"},
+	
+	SendFun = fun(Subscriber, Headers, post, Body) ->
+		?assertEqual("http://some-url.com", Subscriber),
+		?assertEqual(Message#message.headers, Headers),
+		?assertEqual(Message#message.body, Body),
+		{ok, 200, [], []}
+	end,
+	Mod:deliver(Message, SendFun).	
+
 test_mod() ->
 	test_mod([]).
 		

@@ -22,6 +22,9 @@ destination = {
 	"views": {
 		"all": {
 			"map": "function(doc){\n if(doc.type == 'queue' || doc.type == 'topic') {\nemit([doc.type, doc.name], doc); \n} \n}"
+		},
+		"subscribers" : {
+			"map": "function(doc){\n if(doc.type == 'subscription'){\nemit([doc.destination], doc); \n}\n}"
 		}
 	}
 }

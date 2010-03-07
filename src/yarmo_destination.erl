@@ -4,7 +4,7 @@
 -include("yarmo.hrl").
 
 -export([find/1, find_all/0, create/1, generate_key/2]).
--export([subscribe/2, subscribe/3, unsubscribe/1]).
+-export([subscribe/2, subscribe/3, unsubscribe/1, subscribers/1, deliver/2]).
 
 find(#destination{type = Type, name = Name}) ->
 	case Store:read(generate_key(Type, Name)) of
@@ -34,6 +34,7 @@ generate_key(Type, Name) ->
 
 subscribe(#destination{type = "topic"} = Destination, Subscriber) ->
 	subscribe(Destination, Subscriber, "false").	
+	
 subscribe(#destination{type = "topic", id = DestId}, Subscriber, POE) ->
 	Timestamp = ?timestamp(),
 	Document = [
@@ -51,12 +52,41 @@ unsubscribe(#subscription{id = Id} = Subscription) ->
 	case Store:read(Id) of
 		not_found -> {ok, not_found};
 		Doc -> 
-			case Store:delete(Id, Store:get_value(Doc, "_rev"))	of
+			Rev = ?b2l(Store:get_value(Doc, "_rev")),
+			case Store:delete(Id, Rev)	of
 				{error, refetch} -> unsubscribe(Subscription);
 				Any -> Any
 			end		
 	end.	
+	
+subscribers(#destination{id = Id}) ->
+	Key = [$[, $"] ++ Id ++ [$", $]],
+	Options = [{key, Key}],
+	
+	Fun = fun(Doc) ->
+		Val = fun(Name) -> ?b2l(Store:get_value(Doc, Name)) end,
+		#subscription{
+			id = Val("_id"), 
+			rev = Val("_rev"), 
+			destination = Val("destination"),
+			subscriber = Val("subscriber"), 
+			poe = Val("poe")
+		}
+	end,	
+	lists:map(Fun, Store:view("destination", "subscribers", Options)).
+	
+%% SendFun for now should be a wrapper for ibrowse:send_req	
+deliver(#message{destination = Destination, headers = Headers, body = Body}, SendFun) ->
+	Subscribers = subscribers(#destination{id = Destination}),
 
+	DeliveryFun = fun(#subscription{subscriber = Subscriber, poe = _POE}) ->
+		case SendFun(Subscriber, Headers, post, Body) of
+			{ok, _, _, _}   -> {ok, delivered};
+			{error, Reason} -> {error, Reason}
+		end
+	end,			
+	lists:foreach(fun(S) -> spawn(fun() -> DeliveryFun(S) end) end, Subscribers).	
+	
 doc2dest(Doc) ->
 	BinFun = fun yarmo_bin_util:bin_to_list/1,	
 	

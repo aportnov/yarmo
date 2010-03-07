@@ -21,3 +21,6 @@ curl -v -X PUT http://localhost:8000/topics/sample/topic
 # Consume Queue Message:
 
 curl -v -X POST  http://localhost:8000/queues/single/ack/sample/poller
+
+# Create PUSH subscriber for a topic
+curl -v -X POST http://localhost:8000/topics/sample/topic/subscribers -d "subscriber=http://www.somesite.com/subscriber" 
