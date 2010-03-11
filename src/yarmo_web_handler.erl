@@ -145,6 +145,8 @@ post_message(#destination{name = Name} = Destination) ->
 	MsgMod = yarmo_message:new(Store),
 	
 	Msg = create_message(Destination, Request, fun(Msg) -> MsgMod:create(Msg) end),
+	push_message(Destination, Msg),
+	
 	{201, [{'Location', MessageUrlFun(message, Msg#message.id)}], []}.		
 
 create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = Headers, body = Body, params = Params}, CreateFun) ->
@@ -260,8 +262,14 @@ get_poe_url(#destination{name = Name} = Destination, POE) ->
 
 post_poe_message(#destination{} = Destination, POE, MessageId) ->
 	MsgMod = yarmo_message:new(Store),
-
-	Fun = fun(Msg) -> MsgMod:update_poe_message(Msg, POE) end,
+    ?LOG("D", [Destination]),
+	Fun = fun(Msg) -> 
+		case MsgMod:update_poe_message(Msg, POE) of
+			{ok, {rev, _}} = Res ->
+				push_message(Destination, Msg), Res;
+			Any -> Any	
+		end	
+	end,
 	
 	case create_message(Destination, Request#request{params = [{"message_id", MessageId}]}, Fun) of
 		not_found                    -> {404, [], <<"Not Found.">>};
@@ -272,12 +280,14 @@ post_poe_message(#destination{} = Destination, POE, MessageId) ->
 	end.		
 	
 %% Message Batches
+%% TODO - I should change order here. Should create a batch, save batch ID with every message. 
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
 	MsgMod = yarmo_message:new(Store),
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
 		Msg = create_message(Destination, MsgReq, fun(Doc) -> MsgMod:create(Doc) end),
+		push_message(Destination, Msg),
 		[UrlFun(message, Msg#message.id) | Acc]
 	end,	
 	Body = lists:foldr(MsgFun, [], parse_batch_body()),
@@ -355,6 +365,13 @@ poe_request(Destination, Callback) ->
 	with_destination(Destination, Fun).
 	
 %% Utility Functions
+push_message(#destination{type = "topic"}, #message{} = Msg) ->
+	Mod = yarmo_destination:new(Store),
+	spawn(fun() -> Mod:deliver(Msg, fun ibrowse:send_req/4) end),
+	{ok, spawn};
+
+push_message(#destination{type = "queue"}, _Msg) ->
+	{ok, no_action}.
 
 name_to_destination(Name) ->
 	Type = case ?l2a(Request#request.context_root) of

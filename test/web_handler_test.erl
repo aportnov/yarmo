@@ -343,18 +343,22 @@ create_poe_message_test_() ->
 	Document = [
 		{<<"_id">>, <<"poe-id">>},
 		{<<"_rev">>, <<"some">>},
-		{<<"destination">>, <<"queue:sample.queue">>},
+		{<<"destination">>, <<"queue:existing.queue">>},
 		{<<"poe">>, <<"11">>},
 		{<<"max_ttl">>, 300},
 		{<<"created_timestamp">>, 77777}
 	],
+	
+	ReadFun = fun(["poe-id"]) -> Document;
+				 (D) -> (mock_dest())(D)
+	end,	
 
 	Assert = fun(ExpectedResponse, MockStore, Req) ->
 		fun() -> ?assertEqual(ExpectedResponse, execute(MockStore, Req)) end
 	end,
 	
 	MockStore = fun(not_found) -> [{read, not_found}];
-		           (Rev) -> [{read, Document}, {update, {{id, <<"poe-id">>}, {rev, Rev}}}]
+		           (Rev) -> [{read, ReadFun}, {update, {{id, <<"poe-id">>}, {rev, Rev}}}]
 	end,	
 	
 	[
