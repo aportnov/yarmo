@@ -135,6 +135,31 @@ topic_subscribers_test() ->
 		poe = "false"
 	}] = Mod:subscribers(#destination{id = "topic:sample.topic"}).	
 
+find_subscriber_test_() ->
+	[
+		fun() ->
+			Mod = test_mod([{read, not_found}]),
+		    ?assertEqual(not_found, Mod:subscriber("some"))	
+		end,
+		fun() ->
+			Timestamp = ?timestamp(),
+			Doc = [
+			    {<<"_id">>, <<"sub-id">>},
+			    {<<"_rev">>, <<"sub-rev">>},
+				{<<"type">>, <<"subscription">>},
+				{<<"destination">>, <<"topic:some.topic">>},
+				{<<"subscriber">>, <<"http://www.some.com">>},
+				{<<"poe">>, <<"false">>},
+				{<<"created_timestamp">>, Timestamp}
+			],
+			Sub = #subscription{id = "sub-id", rev = "sub-rev", 
+								destination = "topic:some.topic",
+								subscriber = "http://www.some.com", poe = "false"},
+			Mod = test_mod([{read, Doc}]),
+			?assertEqual(Sub, Mod:subscriber("sub-id"))
+		end		
+	].
+
 deliver_message_topic_subscribers_test() ->
 	ViewFun = fun(["destination", "subscribers", [{key,"[\"topic:sample.topic\"]"}]]) -> 
 		[

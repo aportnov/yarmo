@@ -4,7 +4,7 @@
 -include("yarmo.hrl").
 
 -export([find/1, find_all/0, create/1, generate_key/2]).
--export([subscribe/2, subscribe/3, unsubscribe/1, subscribers/1, deliver/2]).
+-export([subscribe/2, subscribe/3, unsubscribe/1, subscribers/1, deliver/2, subscriber/1]).
 
 find(#destination{type = Type, name = Name}) ->
 	case Store:read(generate_key(Type, Name)) of
@@ -59,21 +59,16 @@ unsubscribe(#subscription{id = Id} = Subscription) ->
 			end		
 	end.	
 	
+subscriber(ID) ->	
+	case Store:read(ID) of
+		not_found -> not_found;
+		Doc -> Fun = doc2subscription(), Fun(Doc)
+	end.	
+	
 subscribers(#destination{id = Id}) ->
 	Key = [$[, $"] ++ Id ++ [$", $]],
 	Options = [{key, Key}],
-	
-	Fun = fun(Doc) ->
-		Val = fun(Name) -> ?b2l(Store:get_value(Doc, Name)) end,
-		#subscription{
-			id = Val("_id"), 
-			rev = Val("_rev"), 
-			destination = Val("destination"),
-			subscriber = Val("subscriber"), 
-			poe = Val("poe")
-		}
-	end,	
-	lists:map(Fun, Store:view("destination", "subscribers", Options)).
+	lists:map(doc2subscription(), Store:view("destination", "subscribers", Options)).
 	
 %% SendFun for now should be a wrapper for ibrowse:send_req	
 deliver(#message{destination = Destination, headers = Headers, body = Body}, SendFun) ->
@@ -99,3 +94,15 @@ doc2dest(Doc) ->
 		reply_time = Store:get_value(Doc, "reply_time"),
 		ack_mode   = BinFun(Store:get_value(Doc, "ack_mode"))
 	}.	
+
+doc2subscription() ->
+	fun(Doc) ->
+		Val = fun(Name) -> ?b2l(Store:get_value(Doc, Name)) end,
+		#subscription{
+			id = Val("_id"), 
+			rev = Val("_rev"), 
+			destination = Val("destination"),
+			subscriber = Val("subscriber"), 
+			poe = Val("poe")
+		}
+	end.	

@@ -44,6 +44,8 @@ handle_get() ->
 			with_destination(lists:reverse(Destination), fun(D) -> next_message(D, Bookmark) end);				
 		[BatchId, "batches" | Destination] ->
 			get_batch(lists:reverse(Destination), BatchId);	
+		[SubscriptionId, "subscribers" | Destination] ->
+			with_destination(lists:reverse(Destination), fun(D) -> get_subscription(D, SubscriptionId) end);	
 		[] ->
 			{404, [], <<"Not Found.">>};
 		Destination ->
@@ -83,7 +85,12 @@ handle_put() ->
 	end.	
 
 handle_delete() ->
-	{501, [], <<"Not Implemented.">>}.		
+	case lists:reverse(Request#request.path) of
+		[SubscriptionId, "subscribers" | Destination] ->
+			with_destination(lists:reverse(Destination), fun(D) -> delete_subscription(D, SubscriptionId) end);
+		_ ->
+			{501, [], <<"Not Implemented.">>}		
+	end.	
 	
 %% Private API Implementation
 get_message(MessageId) ->
@@ -329,7 +336,21 @@ create_destination(#destination{} = Destination) ->
 			{'Message-MAX-TTL', integer_to_list(Dest#destination.max_ttl)},
 			{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []}.
 
+get_subscription(#destination{id = DestId}, SubscriptionId) ->
+	Mod = yarmo_destination:new(Store),
+	case Mod:subscriber(SubscriptionId) of
+		not_found -> 
+			{404, [], <<"Not Found.">>};
+		#subscription{destination =  DestId, poe = POE, subscriber = Subscriber} ->
+			{200, [{'Subscriber', Subscriber}, {'poe', POE}], []};
+		_ -> 
+			{400, [], <<"Invalid Destination.">>}	
+	end.	
+
 %% Create a subscriber for PUSH delivery
+create_subscription(#destination{type = "queue"}) ->
+	{412, [], <<"Subscriptions only supported by topics">>};
+	
 create_subscription(#destination{name = Name, type = "topic"} = Destination) ->
 	Mod = yarmo_destination:new(Store),
 	case ?OPTION('subscriber', undefined, Request#request.params) of
@@ -341,6 +362,20 @@ create_subscription(#destination{name = Name, type = "topic"} = Destination) ->
 			UrlFun = location_url(Name),
 			{201, [{'Location', UrlFun(subscription, Id)}], []}
 	end.			
+
+%% Delete topic subscription
+delete_subscription(#destination{type = "queue"}, _) -> {204, [], []};
+delete_subscription(#destination{id = DestId, type = "topic"}, SubscriptionId) ->
+	Mod = yarmo_destination:new(Store),
+	case Mod:subscriber(SubscriptionId) of
+		#subscription{destination =  DestId} = Sub ->
+			case Mod:unsubscribe(Sub) of
+				{ok, _}        -> {204, [], []};
+				{error, Error} -> {400, [], yarmo_bin_util:thing_to_bin(Error)}
+			end;	
+		not_found -> {204, [], []};
+		_         -> {400, [], <<"Invalid Destination.">>}	
+	end.	
 
 %% Filters
 with_destination(Name, FoundCallback) ->

@@ -385,7 +385,65 @@ create_topic_subscription_test_() ->
 		Assert({201, [{'Location', "/topics/existing/topic/subscribers/sub-id"}], []},
 		 	Request#request{params = [{"subscriber", "http://some-url"}]})
 	].	
-		
+
+%% GET subscription
+get_subscription_test_() ->
+	Request = #request{context_root = "topics", method = 'GET', params = [], headers = []},
+	Doc = [
+	    {<<"_rev">>, <<"sub-rev">>},
+		{<<"type">>, <<"subscription">>},
+		{<<"subscriber">>, <<"http://www.some.com">>},
+		{<<"poe">>, <<"false">>},
+		{<<"created_timestamp">>, ?timestamp()}
+	],
+	Assert = fun(ExpectedResponse, Req) ->
+		ReadFun = fun(["noise"]) -> not_found; 
+			         (["sub-id"]) -> [{<<"destination">>, <<"topic:existing.topic">>}, {<<"_id">>, <<"sub-id">>} | Doc]; 
+			         (["sub-nm"]) -> [{<<"destination">>, <<"topic:someother.topic">>}, {<<"_id">>, <<"sub-nm">>} | Doc]; 
+			         (D) -> (mock_dest())(D) 
+		end,
+		MockStore = [{read, ReadFun}], 	
+		fun() -> ?assertEqual(ExpectedResponse, execute(MockStore, Req)) end
+	end,
+	
+	[
+		Assert({404, [], <<"Not Found.">>}, Request#request{path = ["existing", "topic", "subscribers", "noise"]}),
+		Assert({400, [], <<"Invalid Destination.">>}, Request#request{path = ["existing", "topic", "subscribers", "sub-nm"]}),
+ 		Assert({200, [{'Subscriber', "http://www.some.com"}, {'poe', "false"}], []}, Request#request{path = ["existing", "topic", "subscribers", "sub-id"]})
+	].
+
+%% DELETE subscription
+unsubscribe_from_topic_test_() ->
+	Request = #request{context_root = "topics", method = 'DELETE', params = [], headers = []},
+	Doc = [
+	    {<<"_rev">>, <<"sub-rev">>},
+		{<<"type">>, <<"subscription">>},
+		{<<"subscriber">>, <<"http://www.some.com">>},
+		{<<"poe">>, <<"false">>},
+		{<<"created_timestamp">>, ?timestamp()}
+	],
+	Assert = fun(ExpectedResponse, Req) ->
+		ReadFun = fun(["noise"]) -> not_found; 
+			         (["sub-id"]) -> [{<<"destination">>, <<"topic:existing.topic">>}, {<<"_id">>, <<"sub-id">>} | Doc]; 
+			         (["sub-dl"]) -> [{<<"destination">>, <<"topic:existing.topic">>}, {<<"_id">>, <<"sub-dl">>} | Doc]; 
+			         (["sub-nm"]) -> [{<<"destination">>, <<"topic:someother.topic">>}, {<<"_id">>, <<"sub-nm">>} | Doc]; 
+			         (D) -> (mock_dest())(D) 
+		end,
+		DeleteFun = fun(["sub-id", _]) -> {ok, deleted};
+			    	   (["sub-dl", _]) -> {error, some_error}	
+		end, 	 
+		MockStore = [{read, ReadFun}, {delete, DeleteFun}], 	
+		fun() -> ?assertEqual(ExpectedResponse, execute(MockStore, Req)) end
+	end,
+
+	[
+		Assert({204, [], []}, Request#request{context_root = "queues", path = ["existing", "queue", "subscribers", "sub-id"]}),
+		Assert({204, [], []}, Request#request{path = ["existing", "topic", "subscribers", "noise"]}),
+		Assert({204, [], []}, Request#request{path = ["existing", "topic", "subscribers", "sub-id"]}),
+		Assert({400, [], <<"Invalid Destination.">>}, Request#request{path = ["existing", "topic", "subscribers", "sub-nm"]}),
+		Assert({400, [], <<"some_error">>}, Request#request{path = ["existing", "topic", "subscribers", "sub-dl"]})
+	].
+				
 	
 %% Helper Functions
 split_link(LinkHeader) ->
