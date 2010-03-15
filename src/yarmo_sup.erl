@@ -14,6 +14,8 @@
 %% supervisor callbacks
 -export([init/1]).
 
+-define(STORE, yarmo_store).
+
 %% @spec start_link() -> ServerRet
 %% @doc API for starting the supervisor.
 start_link() ->
@@ -41,6 +43,8 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
+	init_database(),
+	
     Processes = [web_process(), background_process()],
     {ok, {{one_for_one, 10, 10}, Processes}}.
 
@@ -58,14 +62,13 @@ web_process() ->
            permanent, 5000, worker, dynamic}.
 
 background_process() ->
-	Store = yarmo_store,	
 	Config = [
 		{destinations, fun() -> 
-			Mod = yarmo_destination:new(Store),
+			Mod = yarmo_destination:new(?STORE),
 			Mod:find_all() 
 		end},
 		{expire_messages, fun(Destination) ->
-			Mod = yarmo_message:new(Store),
+			Mod = yarmo_message:new(?STORE),
 			Mod:remove_expired(Destination)
 		end},
 		{interval, timer:seconds(30)}
@@ -73,3 +76,10 @@ background_process() ->
 	{yarmo_tasks,
 		{yarmo_tasks, start, [Config]},
 		permanent, 5000, worker, dynamic}.
+
+init_database() ->
+	Config = yarmo_deps:local_path(["priv", "conf", "views"]),
+	{ok, Options} = file:consult(Config),
+	Documents = proplists:get_value(views, Options, []),
+	
+	lists:foreach(fun({Name, Views}) -> ?STORE:create_view(Name, Views) end, Documents).

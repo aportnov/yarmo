@@ -1,0 +1,16 @@
+{views,[
+	{"message", [
+		{"undelivered", 
+			<<"function(doc) {\n if (doc.type == 'message' && !doc.consumed_timestamp) {\nemit([doc.destination, doc.created_timestamp, doc._id], doc);\n}\n}">>},
+		{"unacknowledged", 
+			<<"function(doc) {\n if (doc.type == 'message' && doc.destination.split(':')[0] == 'queue' && doc.consumed_timestamp && !doc.acknowledged_timestamp) {\nemit([doc.destination, doc.consumed_timestamp, doc._id], null); \n} \n}">>},
+		{"all",
+			<<"function(doc) {\n if (doc.type == 'message') {\nemit([doc.destination, doc.created_timestamp], doc);\n} \n}">>}			
+	]},
+	{"destination", [
+		{"all",
+			<<"function(doc){\n if(doc.type == 'queue' || doc.type == 'topic') {\nemit([doc.type, doc.name], doc); \n} \n}">>},
+		{"subscribers",
+			<<"function(doc){\n if(doc.type == 'subscription'){\nemit([doc.destination], doc); \n}\n}">>}		
+	]}
+]}.

@@ -5,7 +5,8 @@
 
 -include("yarmo.hrl").
 
--export([read/1, create/1, create/2, delete/2, bulk_delete/1, update/3, get_value/2, view/3, view/2]).
+-export([read/1, create/1, create/2, delete/2, bulk_delete/1, update/3, get_value/2]).
+-export([view/3, view/2, create_view/2]).
 
 -define(DB_READ(Key), couchdb:retrieve_document(?DB_HOST, ?DATABASE_NAME, Key)).
 -define(DB_CREATE_ID(Key, Document), couchdb:create_document(?DB_HOST,?DATABASE_NAME, {Key, Document})).
@@ -14,6 +15,8 @@
 -define(DB_REPLACE(Key, Rev, Document), couchdb:replace_document(?DB_HOST, ?DATABASE_NAME, Key, Rev, Document)).
 -define(DB_DELETE(Key, Rev), couchdb:delete_document(?DB_HOST, ?DATABASE_NAME, Key, Rev)).
 -define(DB_DELETE_BULK(L), erlang_couchdb:delete_documents(?DB_HOST, ?DATABASE_NAME, L)).
+-define(DB_CREATE_VIEW(ViewName, Views, Attributes), 
+		erlang_couchdb:create_view(?DB_HOST, ?DATABASE_NAME, ViewName, <<"javascript">>, Views, Attributes)).
 
 read(Key) ->
 	case ?DB_READ(Key) of
@@ -76,6 +79,16 @@ view(DocName, ViewName, Options) ->
 	lists:map(fun({struct, [_, _, {<<"value">>, Value }] }) -> 
 		case Value of {struct, M} -> M; Any -> Any end	
 	end, Results).
+	
+create_view(ViewName, Views) ->	
+	Attributes = case read("_design/" ++ ViewName) of
+		not_found -> [];
+		Doc -> [{<<"_rev">>, get_value(Doc, "_rev")}]
+	end,
+	{json,{struct, [{<<"ok">>, true},
+	               {<<"id">>, Id},
+	               {<<"rev">>, Rev}]} } = ?DB_CREATE_VIEW(ViewName, Views, Attributes),
+	{{id, Id}, {rev, Rev}}.	
 
 get_value(Document, Name) ->	
 	case lists:keysearch(?l2b(Name), 1, Document) of
