@@ -1,4 +1,4 @@
--module(yarmo_web_handler, [Request, Store]).
+-module(yarmo_web_handler, [Request]).
 -author('author <alex.portnov@gmail.com>').
 
 -export([handle/0]).
@@ -12,6 +12,9 @@
 
 -define(LINK(Links), yarmo_link_util:link_header(Links)).
 -define(OPTION(Name, Default, Options), yarmo_web_util:get_option(Name, Default, Options)).
+
+-define(MSG_MOD, yarmo_config:get(message)).
+-define(DEST_MOD, yarmo_config:get(destination)).
 
 %% Public API
 handle() ->
@@ -94,7 +97,7 @@ handle_delete() ->
 	
 %% Private API Implementation
 get_message(MessageId) ->
-	Mod = yarmo_message:new(Store),
+	Mod = ?MSG_MOD,
 	case Mod:find(MessageId) of
 		not_found ->
 			{404, [], <<"Not Found.">>};
@@ -149,7 +152,7 @@ get_relationships(Relationships, #destination{name = DestName}) ->
 %% Messages
 post_message(#destination{name = Name} = Destination) ->
 	MessageUrlFun = location_url(Name),
-	MsgMod = yarmo_message:new(Store),
+	MsgMod = ?MSG_MOD,
 	
 	Msg = create_message(Destination, Request, fun(Msg) -> MsgMod:create(Msg) end),
 	push_message(Destination, Msg),
@@ -167,7 +170,7 @@ create_message(#destination{id = DestId, max_ttl = MaxTtl}, #request{headers = H
 	CreateFun(Document).
 
 consume_message(#destination{name = Name, type = "queue", ack_mode = AckMode} = Destination) ->
-    MsgMod = yarmo_message:new(Store),
+    MsgMod = ?MSG_MOD,
 
 	LinkFun = fun(P, Rel) -> #link{href= full_destination_url("http", Name, P), rel = [Rel]} end,	
 
@@ -227,19 +230,19 @@ add_content_location(#destination{name = Name}, #message{id = Id} = Msg) ->
 	Msg#message{headers = Headers}.			
 			
 last_message(#destination{type = "topic"} = Destination) ->
-    MsgMod = yarmo_message:new(Store),
+    MsgMod = ?MSG_MOD,
 	retrieve_message(Destination, fun() -> MsgMod:consume(Destination) end).
 
 first_message(#destination{type = "topic"} = Destination) ->
-    MsgMod = yarmo_message:new(Store),
+    MsgMod = ?MSG_MOD,
 	retrieve_message(Destination, fun() -> MsgMod:first_message(Destination) end).
 
 next_message(#destination{type = "topic"} = Destination, Bookmark) ->	
-	MsgMod = yarmo_message:new(Store),
+	MsgMod = ?MSG_MOD,
 	retrieve_message(Destination, fun() -> MsgMod:next_message(Destination, ?DECODE(Bookmark)) end).
 
 acknowledge_message(MessageId, ETag) ->
-    MsgMod = yarmo_message:new(Store),
+    MsgMod = ?MSG_MOD,
 	
 	case ?OPTION('acknowledgement', [], Request#request.params) of
 		[]  -> {400, [], <<"acknowledgement parameter is required">>};
@@ -260,7 +263,7 @@ acknowledge_message(MessageId, ETag) ->
 	end.			
 		
 get_poe_url(#destination{name = Name} = Destination, POE) ->
-	MsgMod = yarmo_message:new(Store),
+	MsgMod = ?MSG_MOD,
 
 	{id, MsgId} = MsgMod:create_poe_message(Destination, POE),
 
@@ -268,7 +271,7 @@ get_poe_url(#destination{name = Name} = Destination, POE) ->
 	{200, [{'POE-Links', Link}], []}.
 
 post_poe_message(#destination{} = Destination, POE, MessageId) ->
-	MsgMod = yarmo_message:new(Store),
+	MsgMod = ?MSG_MOD,
     ?LOG("D", [Destination]),
 	Fun = fun(Msg) -> 
 		case MsgMod:update_poe_message(Msg, POE) of
@@ -290,7 +293,7 @@ post_poe_message(#destination{} = Destination, POE, MessageId) ->
 %% TODO - I should change order here. Should create a batch, save batch ID with every message. 
 post_batch(#destination{name = Name} = Destination) ->
 	UrlFun = location_url(Name),
-	MsgMod = yarmo_message:new(Store),
+	MsgMod = ?MSG_MOD,
 	
 	MsgFun = fun(#request{} = MsgReq, Acc) ->
 		Msg = create_message(Destination, MsgReq, fun(Doc) -> MsgMod:create(Doc) end),
@@ -328,7 +331,7 @@ create_destination(#destination{} = Destination) ->
 	ReplyTime = Header("Message-Reply-Time", Destination#destination.reply_time),
 	AckMode = Header("Message-Ack-Mode", Destination#destination.ack_mode),
 	
-	Mod = yarmo_destination:new(Store),
+	Mod = ?DEST_MOD,
 	Dest = Mod:create(Destination#destination{max_ttl = MaxTtl, reply_time = ReplyTime, ack_mode = AckMode}),
 
 	{201, [ {'Location', destination_url(Destination#destination.name)}, 
@@ -337,7 +340,7 @@ create_destination(#destination{} = Destination) ->
 			{'Message-Reply-Time', integer_to_list(Dest#destination.reply_time)} ], []}.
 
 get_subscription(#destination{id = DestId}, SubscriptionId) ->
-	Mod = yarmo_destination:new(Store),
+	Mod = ?DEST_MOD,
 	case Mod:subscriber(SubscriptionId) of
 		not_found -> 
 			{404, [], <<"Not Found.">>};
@@ -352,7 +355,7 @@ create_subscription(#destination{type = "queue"}) ->
 	{412, [], <<"Subscriptions only supported by topics">>};
 	
 create_subscription(#destination{name = Name, type = "topic"} = Destination) ->
-	Mod = yarmo_destination:new(Store),
+	Mod = ?DEST_MOD,
 	case ?OPTION('subscriber', undefined, Request#request.params) of
 		undefined  ->
 			{400, [], <<"subscriber param is required.">>};
@@ -366,7 +369,7 @@ create_subscription(#destination{name = Name, type = "topic"} = Destination) ->
 %% Delete topic subscription
 delete_subscription(#destination{type = "queue"}, _) -> {204, [], []};
 delete_subscription(#destination{id = DestId, type = "topic"}, SubscriptionId) ->
-	Mod = yarmo_destination:new(Store),
+	Mod = ?DEST_MOD,
 	case Mod:subscriber(SubscriptionId) of
 		#subscription{destination =  DestId} = Sub ->
 			case Mod:unsubscribe(Sub) of
@@ -383,7 +386,7 @@ with_destination(Name, FoundCallback) ->
 
 with_destination(Name, FoundCallback, NotFoundCallback) ->
 	Destination = name_to_destination(Name),
-	Mod = yarmo_destination:new(Store),
+	Mod = ?DEST_MOD,
 	
 	case Mod:find(Destination) of
 		not_found -> NotFoundCallback(Destination);
@@ -401,7 +404,7 @@ poe_request(Destination, Callback) ->
 	
 %% Utility Functions
 push_message(#destination{type = "topic"}, #message{} = Msg) ->
-	Mod = yarmo_destination:new(Store),
+	Mod = ?DEST_MOD,
 	spawn(fun() -> Mod:deliver(Msg, fun ibrowse:send_req/4) end),
 	{ok, spawn};
 

@@ -66,5 +66,4 @@ request_data(Req) ->
 	}.	
 
 handler(#request{} = Request) ->
-	Store = yarmo_store,
-	yarmo_web_handler:new(Request, Store).		
+	yarmo_web_handler:new(Request).		

@@ -302,10 +302,7 @@ create_batch_from_atom_feed_test() ->
 		([_Doc]) -> {{id, <<"batch-id">>}, {rev, <<"BatchRev">>}}
 	end,
 	
-	Store = mock_store:new([{read, mock_dest()}, {create, CreateFun}]),		
-	Mod = handler_mod(Request, Store),
-	
-	{201, [{'Content-Type', "text/uri-list"}, {'Location', Location}], Body } = Mod:handle(),
+	{201, [{'Content-Type', "text/uri-list"}, {'Location', Location}], Body } = execute([{read, mock_dest()}, {create, CreateFun}], Request),
 	?assertEqual("/queues/existing/queue/batches/batch-id", Location),
 	?assertEqual("/queues/existing/queue/messages/urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a", Body).  							
 
@@ -455,9 +452,15 @@ split_link(LinkHeader) ->
 
 execute(MockStore, Request) ->
 	Store = mock_store:new(MockStore),
-	Mod = handler_mod(Request, Store),
-	Mod:handle().
-	
+	Modules = [{message, yarmo_message}, {destination, yarmo_destination}],
+	Options = lists:map(fun({Name, Mod}) -> {Name, Mod:new(Store)} end, Modules),
+	try
+		yarmo_config:start(Options),
+		Mod = handler_mod(Request),
+		Mod:handle()
+	after
+		yarmo_config:stop()
+	end.	
 
 mock_dest() ->
 	mock_dest("auto").
@@ -479,8 +482,8 @@ mock_dest(AckMode) ->
 	end.
 					
 
-handler_mod(#request{} = Request, Store) ->	
-	yarmo_web_handler:new(Request, Store).
+handler_mod(#request{} = Request) ->	
+	yarmo_web_handler:new(Request).
 	
 mock_feed() ->
 	"<?xml version='1.0' encoding='utf-8'?>

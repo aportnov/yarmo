@@ -45,7 +45,7 @@ upgrade() ->
 init([]) ->
 	init_database(),
 	
-    Processes = [web_process(), background_process()],
+    Processes = [config_server(), web_process(), background_process()],
     {ok, {{one_for_one, 10, 10}, Processes}}.
 
 %% Private API
@@ -60,6 +60,14 @@ web_process() ->
     {yarmo_web,
            {yarmo_web, start, [Config]},
            permanent, 5000, worker, dynamic}.
+
+config_server() ->
+	Modules = [{message, yarmo_message}, {destination, yarmo_destination}],
+	
+	Options = lists:map(fun({Name, Mod}) -> {Name, Mod:new(?STORE)} end, Modules),
+	{yarmo_config,
+		{yarmo_config, start, [Options]},
+		permanent, 5000, worker, dynamic}.
 
 background_process() ->
 	Config = [
