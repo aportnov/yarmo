@@ -452,6 +452,7 @@ split_link(LinkHeader) ->
 
 execute(MockStore, Request) ->
 	Store = mock_store:new(MockStore),
+
 	Modules = [{message, yarmo_message}, {destination, yarmo_destination}],
 	Options = lists:map(fun({Name, Mod}) -> {Name, Mod:new(Store)} end, Modules),
 	try

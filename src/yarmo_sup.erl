@@ -43,7 +43,10 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
-	init_database(),
+	Config = yarmo_deps:local_path(["priv", "conf", "yarmo.ini"]),
+	{ok, Options} = file:consult(Config),
+
+	init_database(Options),
 	
     Processes = [config_server(), web_process(), background_process()],
     {ok, {{one_for_one, 10, 10}, Processes}}.
@@ -85,9 +88,6 @@ background_process() ->
 		{yarmo_tasks, start, [Config]},
 		permanent, 5000, worker, dynamic}.
 
-init_database() ->
-	Config = yarmo_deps:local_path(["priv", "conf", "views"]),
-	{ok, Options} = file:consult(Config),
+init_database(Options) ->
 	Documents = proplists:get_value(views, Options, []),
-	
 	lists:foreach(fun({Name, Views}) -> ?STORE:create_view(Name, Views) end, Documents).
