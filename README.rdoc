@@ -1,5 +1,5 @@
 = Yet Another Messaging Option
-This is an implementation of the (<REST-*|http://www.jboss.org/reststar>) specification. (Currently Draft 4 is implemented).
+This is an implementation of the REST-*|http://www.jboss.org/reststar specification. (Currently Draft 4 is implemented).
 Current implementation supports poll pattern for queue and topic and push notification for topic subscriptions.
 
 = Installation dependencies
