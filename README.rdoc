@@ -1,0 +1,54 @@
+= Yet Another Messaging Option
+This is an implementation of the (<REST-*|http://www.jboss.org/reststar>) specification. (Currently Draft 4 is implemented).
+Current implementation supports poll pattern for queue and topic and push notification for topic subscriptions.
+
+= Installation dependencies
+
+ (1) CouchDB running on localhost:5984
+
+= Installation Instructions
+
+ (1) Check out code
+ (2) rake erlang:test
+ (3) ./start.sh or ./start-dev.sh 
+
+= Basic Usage Examples:
+
+== Create New Destination:
+ 
+ curl -v -X PUT http://localhost:8000/queues/single/ack/sample -H "Message-Ack-Mode: single"
+ curl -v -X PUT http://localhost:8000/queues/auto/ack/sample -H "Message-Ack-Mode: auto" (default ack mode is auto).
+ curl -v -X PUT http://localhost:8000/queues/erlang/rest/sample
+
+ curl -v -X PUT http://localhost:8000/topics/sample/topic 
+
+== Get Destination Links (Relationships):
+
+ curl -v -X HEAD http://localhost:8000/queues/erlang/rest/sample
+ curl -v -X HEAD http://localhost:8000/topics/sample/topic
+
+== Post New Message:
+
+ curl -v -X POST --data-binary "<message>Erlang is the best</message>" -H "Content-Type: application/xml" http://localhost:8000/queues/erlang/rest/sample/incoming
+ curl -v -X POST --data-binary "<message>Erlang is the best</message>" -H "Content-Type: application/xml" http://localhost:8000/topics/sample/topic/incoming
+
+== Consume Message:
+
+ * Queue
+ 
+  curl -v -X POST  http://localhost:8000/queues/erlang/rest/sample/poller
+ 
+ * Topic
+
+  curl -v -X GET  http://localhost:8000/topics/sample/topic/poller/last
+  curl -v -X GET  http://localhost:8000/topics/sample/topic/poller/first
+  curl -v -X GET  http://localhost:8000/topics/sample/topic/poller/next/{BOOKMARK} BOOKMARK - is the value returned in a Links Header.
+
+== Create PUSH subscriber for a topic:
+
+ curl -v -X POST http://localhost:8000/topics/sample/topic/subscribers -d "subscriber=http://www.somesite.com/subscriber" 
+
+== Read Message:
+
+ curl -v -X GET http://localhost:8000/queues/erlang/rest/sample/messages/{ID} ID is provided in Location Header, when message created
+  

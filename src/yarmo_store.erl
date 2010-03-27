@@ -7,6 +7,7 @@
 
 -export([read/1, create/1, create/2, delete/2, bulk_delete/1, update/3, get_value/2]).
 -export([view/3, view/2, create_view/2]).
+-export([create_db/0]).
 
 -define(DB_READ(Key), couchdb:retrieve_document(?DB_HOST, ?DATABASE_NAME, Key)).
 -define(DB_CREATE_ID(Key, Document), couchdb:create_document(?DB_HOST,?DATABASE_NAME, {Key, Document})).
@@ -17,6 +18,9 @@
 -define(DB_DELETE_BULK(L), erlang_couchdb:delete_documents(?DB_HOST, ?DATABASE_NAME, L)).
 -define(DB_CREATE_VIEW(ViewName, Views, Attributes), 
 		erlang_couchdb:create_view(?DB_HOST, ?DATABASE_NAME, ViewName, <<"javascript">>, Views, Attributes)).
+
+-define(DB_INFO(), couchdb:database_info(?DB_HOST, ?DATABASE_NAME)).
+-define(DB_INIT(), couchdb:create_database(?DB_HOST, ?DATABASE_NAME)).
 
 read(Key) ->
 	case ?DB_READ(Key) of
@@ -89,6 +93,13 @@ create_view(ViewName, Views) ->
 	               {<<"id">>, Id},
 	               {<<"rev">>, Rev}]} } = ?DB_CREATE_VIEW(ViewName, Views, Attributes),
 	{{id, Id}, {rev, Rev}}.	
+
+create_db() ->
+	Name = list_to_binary(?DATABASE_NAME),
+	case ?DB_INFO() of
+		{ok, [{<<"db_name">>, Name} | _ ]}          -> {ok, exists};
+		{ok, [{<<"error">>, <<"not_found">>} | _ ]} -> {?DB_INIT(), create}
+	end.	
 
 get_value(Document, Name) ->	
 	case lists:keysearch(?l2b(Name), 1, Document) of

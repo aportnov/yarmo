@@ -89,5 +89,6 @@ background_process() ->
 		permanent, 5000, worker, dynamic}.
 
 init_database(Options) ->
+	?STORE:create_db(),
 	Documents = proplists:get_value(views, Options, []),
 	lists:foreach(fun({Name, Views}) -> ?STORE:create_view(Name, Views) end, Documents).

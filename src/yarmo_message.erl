@@ -107,7 +107,7 @@ first_message(#destination{id = Id, type = "topic"}) ->
 	end.	
 
 next_message(#destination{id = Id, type = "topic"}, {MsgId, Timestamp}) ->
-	case undelivered(Id, [Timestamp, MsgId], ascending, 2) of
+	case undelivered(Id, [trunc(Timestamp), MsgId], ascending, 2) of
 		[] -> not_found;
 		Messages ->
 			Pred = fun(Doc, Acc) ->

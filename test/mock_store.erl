@@ -3,7 +3,9 @@
 
 -behaviour(data_store).
 
--export([read/1, create/1, create/2, get_value/2, view/2, view/3, update/3, delete/2, bulk_delete/1]).
+-export([read/1, create/1, create/2, delete/2, bulk_delete/1, update/3, get_value/2]).
+-export([view/3, view/2, create_view/2]).
+-export([create_db/0]).
 
 read(Key) ->
 	callback(read, [Key]).
@@ -34,7 +36,13 @@ delete(Key, Rev) ->
 	
 bulk_delete(Documents) ->
 	callback(bulk_delete, [Documents]).
+
+create_view(ViewName, Views) ->
+	callback(create_view, [ViewName, Views]).	
 			
+create_db() ->
+	callback(create_db, []).
+				
 %% Helper Functions
 
 callback(Name, Args) ->
