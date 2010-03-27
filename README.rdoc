@@ -3,14 +3,14 @@ This is an implementation of the REST-*|http://www.jboss.org/reststar specificat
 Current implementation supports poll pattern for queue and topic and push notification for topic subscriptions.
 
 = Installation dependencies
- (1) Erlang Runtime
- (2) CouchDB running on localhost:5984
+ 1. Erlang Runtime
+ 2. CouchDB running on localhost:5984
 
 = Installation Instructions
 
- (1) Check out code
- (2) rake erlang:test or make
- (3) ./start.sh or ./start-dev.sh 
+ 1. Check out code
+ 2. rake erlang:test or make
+ 3. ./start.sh or ./start-dev.sh 
 
 = Basic Usage Examples:
 
@@ -34,11 +34,11 @@ Current implementation supports poll pattern for queue and topic and push notifi
 
 == Consume Message:
 
- * Queue
+ == Queue
  
   curl -v -X POST  http://localhost:8000/queues/erlang/rest/sample/poller
  
- * Topic
+ == Topic
 
   curl -v -X GET  http://localhost:8000/topics/sample/topic/poller/last
   curl -v -X GET  http://localhost:8000/topics/sample/topic/poller/first
