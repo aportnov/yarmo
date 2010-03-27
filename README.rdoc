@@ -3,13 +3,13 @@ This is an implementation of the REST-*|http://www.jboss.org/reststar specificat
 Current implementation supports poll pattern for queue and topic and push notification for topic subscriptions.
 
 = Installation dependencies
-
- (1) CouchDB running on localhost:5984
+ (1) Erlang Runtime
+ (2) CouchDB running on localhost:5984
 
 = Installation Instructions
 
  (1) Check out code
- (2) rake erlang:test
+ (2) rake erlang:test or make
  (3) ./start.sh or ./start-dev.sh 
 
 = Basic Usage Examples:
