@@ -82,9 +82,9 @@ update_poe_message(#message{id = Id} = Message, POE) ->
 	end.			
 	
 consume(#destination{type = "queue"} = Destination) ->
-	Callback = fun(#message{} = Messsage) ->
-		case update(Messsage#message{consumed_timestamp = ?timestamp()}) of
-			{ok, {rev, Rev}}     -> Messsage#message{rev = Rev};
+	Callback = fun(#message{} = Message) ->
+		case update(Message#message{consumed_timestamp = ?timestamp()}) of
+			{ok, {rev, Rev}}     -> Message#message{rev = Rev};
 			{conflict, refetch}  -> consume(Destination);
 			{bad_request, Error} -> {error, Error}
 		end	

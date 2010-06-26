@@ -1,3 +1,3 @@
 #!/bin/sh
 cd `dirname $0`
-exec erl -pa $PWD/ebin $PWD/deps/*/ebin -boot start_sasl -s yarmo
+exec erl -env ERL_MAX_PORTS 50000 -pa $PWD/ebin $PWD/deps/*/ebin -boot start_sasl -s yarmo
